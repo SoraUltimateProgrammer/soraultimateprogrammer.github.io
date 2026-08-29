@@ -383,11 +383,14 @@ footer {
                 <button onclick="openSettingsModal()">⚙️ Settings</button>
                 <div class="dropdown-submenu-container">
                     <button class="submenu-toggle" onclick="toggleDataLinkMenu(event)">Engage Data Link ▼</button>
-                    <div id="datalink-sub-menu" class="submenu-content" style="display:none; padding-left: 10px;">
-                        <button onclick="openExportModal()">📤 Export via QR Code</button>
-                        <button onclick="openImportModal()">📥 Import via QR Code</button>
-                        <button style="opacity: 0.5; cursor: not-allowed;" title="Coming soon">📤 Export via Bluetooth</button>
-                        <button style="opacity: 0.5; cursor: not-allowed;" title="Coming soon">📥 Import via Bluetooth</button>
+                    <div class="dropdown-submenu-container">
+                        <button class="submenu-toggle" onclick="toggleDataLinkMenu(event)">Engage Data Link ▼</button>
+                        <div id="datalink-sub-menu" class="submenu-content" style="display:none; padding-left: 10px;">
+                            <button onclick="openExportModal()">📤 Export via QR Code</button>
+                            <button onclick="openImportModal()">📥 Import via QR Code</button>
+                            <button onclick="openWebRtcExportModal()">🌐 P2P Export (WebRTC)</button>
+                            <button onclick="openWebRtcImportModal()">🌐 P2P Import (WebRTC)</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -454,20 +457,18 @@ footer {
 
                 <label>API / Feed URL</label>
                 <input type="url" id="edit-url" required>
-
                 
                 <label>Blacklist (optional)</label>
-                <input type="text" id="filter-regex" placeholder="words you don't want to see" autocomplete="off">
+                <input type="text" id="edit-filter-regex" placeholder="words you don't want to see" autocomplete="off">
                 <p style="font-size: 0.7rem; opacity: 0.6; margin-top: -2px;">
                     Hide articles containing this query! (RegEx supported!)
                 </p>
 
                 <label>Whitelist (optional)</label>
-                <input type="text" id="whitelist-regex" placeholder="words you want to see" autocomplete="off">
+                <input type="text" id="edit-whitelist-regex" placeholder="words you want to see" autocomplete="off">
                 <p style="font-size: 0.7rem; opacity: 0.6; margin-top: -2px;">
                     Only show articles containing this query! (RegEx supported!)
                 </p>
-
 
                 <div style="display:none;">
                     <input type="text" id="edit-title-element" value="title">
@@ -539,13 +540,46 @@ footer {
         onchange="handleQRImageUpload(event)"
     >
 </div>
+
+
+<!-- P2P Project !-->
+
+        <!-- WebRTC Export Modal -->
+<div id="webrtc-export-modal" class="modal" style="display:none;">
+    <div class="modal-content">
+        <span class="close-modal" onclick="closeModal('webrtc-export-modal')">&times;</span>
+        <h3>// P2P EXPORT SETUP</h3>
+        <p style="font-size: 0.85rem; opacity: 0.8;">1. Copy this Connection Offer and give it to the receiving laptop:</p>
+        <textarea id="webrtc-offer-box" readonly style="width: 100%; height: 80px; background: rgba(0,0,0,0.4); color: var(--hud-blue); border: 1px solid var(--hud-border); font-family: monospace; font-size: 0.75rem; resize: none;"></textarea>
+        <button onclick="copyWebRtcOffer()" style="width: 100%; margin-top: 6px;">Copy Offer to Clipboard</button>
+
+        <p style="font-size: 0.85rem; opacity: 0.8; margin-top: 15px;">3. Paste the Answer code received from the other laptop:</p>
+        <textarea id="webrtc-answer-input" placeholder="Paste Answer string here..." style="width: 100%; height: 60px; background: rgba(0,0,0,0.4); color: var(--hud-blue); border: 1px solid var(--hud-border); font-family: monospace; font-size: 0.75rem; resize: none;"></textarea>
+        <button onclick="handleWebRtcAnswer()" style="width: 100%; margin-top: 6px;">Establish P2P Link & Send</button>
+    </div>
+</div>
+
+<!-- WebRTC Import Modal -->
+<div id="webrtc-import-modal" class="modal" style="display:none;">
+    <div class="modal-content">
+        <span class="close-modal" onclick="closeModal('webrtc-import-modal')">&times;</span>
+        <h3>// P2P IMPORT SETUP</h3>
+        <p style="font-size: 0.85rem; opacity: 0.8;">1. Paste the Connection Offer from the sender laptop:</p>
+        <textarea id="webrtc-offer-input" placeholder="Paste Offer string here..." style="width: 100%; height: 60px; background: rgba(0,0,0,0.4); color: var(--hud-blue); border: 1px solid var(--hud-border); font-family: monospace; font-size: 0.75rem; resize: none;"></textarea>
+        <button onclick="generateWebRtcAnswer()" style="width: 100%; margin-top: 6px;">Generate Connection Answer</button>
+
+        <p style="font-size: 0.85rem; opacity: 0.8; margin-top: 15px;">2. Copy this Answer code and give it back to the sender:</p>
+        <textarea id="webrtc-answer-box" readonly style="width: 100%; height: 80px; background: rgba(0,0,0,0.4); color: var(--hud-blue); border: 1px solid var(--hud-border); font-family: monospace; font-size: 0.75rem; resize: none;"></textarea>
+        <button onclick="copyWebRtcAnswer()" style="width: 100%; margin-top: 6px;">Copy Answer to Clipboard</button>
+    </div>
+</div>
     </div>
 </div>
     
     <div id="feed-container"></div>
 
     <footer>
-        [CURRENT VERSION: ALPHA-8]
+        [CURRENT VERSION: ALPHA-9]
     </footer>
 
     <script>
@@ -1268,6 +1302,138 @@ footer {
                 pendingImportData = null;
                 closeImportModal();
                 initializeApp();
+            };
+        }
+
+        //Final Section!!!
+
+        // ---------- WEBRTC P2P DATA LINK LOGIC ----------
+        let pc = null;
+        let dataChannel = null;
+
+        function createPeerConnection() {
+            pc = new RTCPeerConnection({
+                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+            });
+        }
+
+        // --- SENDER SIDE ---
+        async function openWebRtcExportModal() {
+            closeDropdown();
+            createPeerConnection();
+
+            dataChannel = pc.createDataChannel("infocpu_streams");
+            setupDataChannelEvents();
+
+            pc.onicecandidate = (event) => {
+                if (!event.candidate) {
+                    // ICE gathering complete, populate offer box
+                    document.getElementById('webrtc-offer-box').value = JSON.stringify(pc.localDescription);
+                }
+            };
+
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+
+            document.getElementById('webrtc-export-modal').style.display = 'block';
+        }
+
+        function copyWebRtcOffer() {
+            const box = document.getElementById('webrtc-offer-box');
+            box.select();
+            navigator.clipboard.writeText(box.value);
+            alert("Offer copied to clipboard!");
+        }
+
+        async function handleWebRtcAnswer() {
+            const val = document.getElementById('webrtc-answer-input').value.trim();
+            if (!val) return;
+            try {
+                const answer = JSON.parse(val);
+                await pc.setRemoteDescription(new RTCSessionDescription(answer));
+            } catch (err) {
+                alert("Invalid answer configuration.");
+            }
+        }
+
+        // --- RECEIVER SIDE ---
+        async function openWebRtcImportModal() {
+            closeDropdown();
+            createPeerConnection();
+
+            pc.ondatachannel = (event) => {
+                dataChannel = event.channel;
+                setupDataChannelEvents();
+            };
+
+            document.getElementById('webrtc-import-modal').style.display = 'block';
+        }
+
+        async function generateWebRtcAnswer() {
+            const val = document.getElementById('webrtc-offer-input').value.trim();
+            if (!val) return;
+
+            try {
+                const offer = JSON.parse(val);
+                await pc.setRemoteDescription(new RTCSessionDescription(offer));
+
+                pc.onicecandidate = (event) => {
+                    if (!event.candidate) {
+                        document.getElementById('webrtc-answer-box').value = JSON.stringify(pc.localDescription);
+                    }
+                };
+
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+            } catch (err) {
+                alert("Invalid offer configuration.");
+            }
+        }
+
+        function copyWebRtcAnswer() {
+            const box = document.getElementById('webrtc-answer-box');
+            box.select();
+            navigator.clipboard.writeText(box.value);
+            alert("Answer copied to clipboard!");
+        }
+
+        // --- DATA CHANNEL HANDLERS ---
+        function setupDataChannelEvents() {
+            dataChannel.onopen = () => {
+                if (pc.signalingState === "have-local-offer" || pc.localDescription?.type === "offer") {
+                    // Sender automatically triggers stream package dispatch upon channel open
+                    const tx = db.transaction(["sources"], "readonly");
+                    tx.objectStore("sources").getAll().onsuccess = (e) => {
+                        const sources = e.target.result;
+                        const payload = {
+                            infocpu_packet: sources.map(s => ({
+                                name: s.name,
+                                url: s.url,
+                                titleElement: s.titleElement || "title",
+                                descriptionElement: s.descriptionElement || "description",
+                                linkElement: s.linkElement || "link",
+                                thumbnailElement: s.thumbnailElement || "image",
+                                filterRegex: s.filterRegex || "",
+                                whitelistRegex: s.whitelistRegex || ""
+                            }))
+                        };
+                        dataChannel.send(JSON.stringify(payload));
+                    };
+                }
+            };
+
+            dataChannel.onmessage = (event) => {
+                try {
+                    const parsed = JSON.parse(event.data);
+                    if (parsed.infocpu_packet) {
+                        pendingImportData = parsed.infocpu_packet;
+                        confirmAndExecuteImport();
+                        alert("P2P Data Link successful! Streams imported.");
+                        closeModal('webrtc-import-modal');
+                    }
+                } catch (err) {
+                    console.error("Failed to parse incoming P2P package:", err);
+                }
             };
         }
     </script>
