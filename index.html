@@ -411,6 +411,12 @@ footer {
     color: #f87171;
     border: 1px solid #ef4444;
 }
+
+.status-warning {
+    background: rgba(245, 158, 11, 0.2);
+    color: #fbbf24;
+    border: 1px solid #f59e0b;
+}
     </style>
 </head>
 <body>
@@ -620,7 +626,7 @@ footer {
     <div id="feed-container"></div>
 
     <footer>
-        [CURRENT VERSION: ALPHA-10]
+        [CURRENT VERSION: PRIME]
     </footer>
 
     <script>
@@ -1359,7 +1365,12 @@ footer {
             pc = new RTCPeerConnection({
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun2.l.google.com:19302' },
+                    { urls: 'stun:stun3.l.google.com:19302' },
+                    { urls: 'stun:stun4.l.google.com:19302' },
+                    { urls: 'stun:stun.stunprotocol.org:3478' },
+                    { urls: 'stun:stun.sip.us:3478' }
                 ]
             });
         }
@@ -1379,36 +1390,56 @@ footer {
             
             iceGatheringComplete = false;
             createPeerConnection();
+            
+            console.log('🔄 ICE Gathering: Starting...');
 
             pc.onconnectionstatechange = () => {
-                console.log('Sender connection state:', pc.connectionState);
+                console.log('📡 Sender connection state:', pc.connectionState);
             };
 
             pc.oniceconnectionstatechange = () => {
-                console.log('Sender ICE connection state:', pc.iceConnectionState);
+                console.log('❄️ Sender ICE connection state:', pc.iceConnectionState);
             };
 
             // Create data channel as sender
             dataChannel = pc.createDataChannel("infocpu_streams", { ordered: true });
             setupDataChannelEvents('export');
 
+            // Timeout for ICE gathering - don't wait forever
+            const iceTimeout = setTimeout(() => {
+                if (!iceGatheringComplete) {
+                    console.warn('⏱️ ICE Gathering Timeout: Taking too long, proceeding with current candidates...');
+                    iceGatheringComplete = true;
+                    const offerJson = JSON.stringify(pc.localDescription);
+                    document.getElementById('webrtc-offer-box').value = offerJson;
+                    showStatus('webrtc-export-modal', 'Offer ready (ICE timeout). Copy and send to receiver.', 'warning');
+                }
+            }, 10000); // 10 second timeout
+
             // Wait for ICE gathering to complete
             pc.onicecandidate = (event) => {
                 if (!event.candidate) {
+                    console.log('✅ ICE Gathering: Complete!');
+                    clearTimeout(iceTimeout);
                     iceGatheringComplete = true;
                     // All ICE candidates gathered, populate offer box
                     const offerJson = JSON.stringify(pc.localDescription);
                     document.getElementById('webrtc-offer-box').value = offerJson;
                     showStatus('webrtc-export-modal', 'Offer ready. Copy and send to receiver.', 'success');
+                } else if (event.candidate) {
+                    console.log('🔍 ICE Candidate found:', event.candidate.candidate.substring(0, 50) + '...');
                 }
             };
 
             try {
+                console.log('📝 Creating offer...');
                 const offer = await pc.createOffer();
                 await pc.setLocalDescription(offer);
+                console.log('📝 Offer created, waiting for ICE candidates...');
             } catch (err) {
+                clearTimeout(iceTimeout);
                 showStatus('webrtc-export-modal', `Offer creation failed: ${err.message}`, 'error');
-                console.error('Offer creation error:', err);
+                console.error('❌ Offer creation error:', err);
             }
         }
 
@@ -1498,25 +1529,44 @@ footer {
             }
 
             try {
+                console.log('📥 Parsing incoming offer...');
                 const offer = JSON.parse(val);
                 await pc.setRemoteDescription(offer);
                 showStatus('webrtc-import-modal', 'Offer received. Generating answer...', 'info');
+                console.log('✅ Remote description set, generating answer...');
+
+                // Timeout for ICE gathering on answer
+                const iceAnswerTimeout = setTimeout(() => {
+                    if (!iceGatheringComplete) {
+                        console.warn('⏱️ ICE Gathering Timeout on answer: Taking too long, proceeding...');
+                        iceGatheringComplete = true;
+                        const answerJson = JSON.stringify(pc.localDescription);
+                        document.getElementById('webrtc-answer-box').value = answerJson;
+                        showStatus('webrtc-import-modal', 'Answer ready (ICE timeout). Copy and send to sender.', 'warning');
+                    }
+                }, 10000);
 
                 // Wait for ICE gathering on answer
                 pc.onicecandidate = (event) => {
                     if (!event.candidate) {
+                        console.log('✅ ICE Gathering Complete (Answer side)!');
+                        clearTimeout(iceAnswerTimeout);
                         iceGatheringComplete = true;
                         const answerJson = JSON.stringify(pc.localDescription);
                         document.getElementById('webrtc-answer-box').value = answerJson;
                         showStatus('webrtc-import-modal', 'Answer ready. Copy and send to sender.', 'success');
+                    } else if (event.candidate) {
+                        console.log('🔍 ICE Candidate found (answer):', event.candidate.candidate.substring(0, 50) + '...');
                     }
                 };
 
+                console.log('📝 Creating answer...');
                 const answer = await pc.createAnswer();
                 await pc.setLocalDescription(answer);
+                console.log('📝 Answer created, waiting for ICE candidates...');
             } catch (err) {
                 showStatus('webrtc-import-modal', `Answer generation failed: ${err.message}`, 'error');
-                console.error('Answer generation error:', err);
+                console.error('❌ Answer generation error:', err);
             }
         }
 
