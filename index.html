@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>The Information CPU</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
     <style>
         :root {
             --hud-blue: #00f3ff;
@@ -335,10 +337,20 @@
         
         <div class="dropdown" id="control-dropdown">
             <button class="hud-btn" onclick="toggleDropdown()">SYSTEM COMMANDS ▼</button>
-            <div class="dropdown-content">
+            <div class="dropdown-content" id="control-dropdown">
                 <button onclick="openAddModal()">+ Add New Stream</button>
-                <button onclick="openModifyModal()">⚙ Modify Streams</button>
-                <button onclick="alert('Module offline: QR import coming soon.')">📷 Import via QR</button>
+                <button onclick="openModifyModal()">Modify Streams</button>
+                <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 4px 0;">
+                
+                <div class="dropdown-submenu-container">
+                    <button class="submenu-toggle" onclick="toggleDataLinkMenu(event)">Engage Data Link ▼</button>
+                    <div id="datalink-sub-menu" class="submenu-content" style="display:none; padding-left: 10px;">
+                        <button onclick="openExportModal()">📤 Export via QR Code</button>
+                        <button onclick="openImportModal()">📥 Import via QR Code</button>
+                        <button style="opacity: 0.5; cursor: not-allowed;" title="Coming soon">📤 Export via Bluetooth</button>
+                        <button style="opacity: 0.5; cursor: not-allowed;" title="Coming soon">📥 Import via Bluetooth</button>
+                    </div>
+                </div>
             </div>
         </div>
     </header>
@@ -404,6 +416,36 @@
             </form>
         </div>
     </div>
+
+    <div id="export-modal" class="modal" style="display:none;">
+    <div class="modal-content">
+        <span class="close" onclick="closeModal('export-modal')">&times;</span>
+        <h2>Export Streams via QR Code</h2>
+        <p style="font-size: 0.85rem; color: #aaa;">Select the data streams you wish to compile into a transmission sequence:</p>
+        
+        <div id="export-source-checkboxes" style="max-height: 150px; overflow-y: auto; margin: 10px 0; border: 1px solid rgba(255,255,255,0.1); padding: 8px;">
+            </div>
+        
+        <button onclick="generateExportQRCode()">Generate Transmission QR</button>
+        
+        <div id="qrcode-display-area" style="display:flex; justify-content:center; margin-top: 15px; background: white; padding: 10px; border-radius: 4px;"></div>
+    </div>
+</div>
+
+<div id="import-modal" class="modal" style="display:none;">
+    <div class="modal-content">
+        <span class="close" onclick="closeImportModal()">×</span>
+        <h2>Import Streams via QR Code</h2>
+        
+        <div id="reader" style="width: 100%; max-width: 300px; margin: 0 auto;"></div>
+        
+        <div id="import-preview-section" style="display:none; margin-top: 15px;">
+            <p style="font-size: 0.85rem; color: #4ade80;">Incoming Data Packet Detected. Confirm payload contents:</p>
+            <div id="import-streams-list" style="max-height: 120px; overflow-y: auto; background: rgba(0,0,0,0.3); padding: 8px; margin: 8px 0; font-size: 0.85rem; text-align: left;"></div>
+            <button onclick="confirmAndExecuteImport()" style="background-color: #22c55e; color: black; font-weight: bold;">Authorize Import</button>
+        </div>
+    </div>
+</div>
 
     <div id="feed-container"></div>
 
@@ -785,6 +827,176 @@
                 .replace(/>/g, "&gt;")
                 .replace(/"/g, "&quot;")
                 .replace(/'/g, "&#039;");
+        }
+
+        //QR Code and Bluetooth stuff
+
+        // Toggle sub-menu expansion
+        function toggleDataLinkMenu(e) {
+            e.stopPropagation();
+            const subMenu = document.getElementById('datalink-sub-menu');
+            subMenu.style.display = subMenu.style.display === 'none' ? 'block' : 'none';
+        }
+        
+        // ---------- EXPORT QR CODE LOGIC ----------
+        function openExportModal() {
+            closeModal('control-dropdown');
+            const container = document.getElementById('export-source-checkboxes');
+            container.innerHTML = "";
+            document.getElementById('qrcode-display-area.innerHTML = "";');
+            document.getElementById('qrcode-display-area').innerHTML = '<span style="color:black; font-size:0.8rem;">Select streams & click generate</span>';
+        
+            const tx = db.transaction(["sources"], "readonly");
+            tx.objectStore("sources").getAll().onsuccess = (e) => {
+                const sources = e.target.result;
+                if (sources.length === 0) {
+                    container.innerHTML = `<div style="color: #aaa; font-size: 0.85rem;">No active data streams to export.</div>`;
+                    return;
+                }
+        
+                sources.forEach(source => {
+                    const label = document.createElement('label');
+                    label.style.display = "block";
+                    label.style.margin = "4px 0";
+                    label.style.fontSize = "0.85rem";
+                    label.innerHTML = `<input type="checkbox" value="${source.id}" checked> ${escapeHtml(source.name)} (${escapeHtml(source.url)})`;
+                    container.appendChild(label);
+                });
+        
+                document.getElementById('export-modal').style.display = "block";
+            };
+        }
+        
+        function generateExportQRCode() {
+            const checkboxes = document.querySelectorAll('#export-source-checkboxes input[type="checkbox"]:checked');
+            if (checkboxes.length === 0) {
+                alert("Please select at least one stream to export.");
+                return;
+            }
+        
+            const selectedIds = Array.from(checkboxes).map(cb => Number(cb.value));
+        
+            const tx = db.transaction(["sources"], "readonly");
+            tx.objectStore("sources").getAll().onsuccess = (e) => {
+                const allSources = e.target.result;
+                const exportPayload = allSources
+                    .filter(s => selectedIds.includes(s.id))
+                    .map(s => ({
+                        name: s.name,
+                        url: s.url,
+                        titleElement: s.titleElement || "title",
+                        descriptionElement: s.descriptionElement || "description",
+                        linkElement: s.linkElement || "link",
+                        thumbnailElement: s.thumbnailElement || "image"
+                    }));
+        
+                const jsonString = JSON.stringify({ infocpu_packet: exportPayload });
+                
+                const qrContainer = document.getElementById('qrcode-display-area');
+                qrContainer.innerHTML = "";
+                
+                // Generate visual QR code graphic
+                new QRCode(qrContainer, {
+                    text: jsonString,
+                    width: 200,
+                    height: 200,
+                    colorDark: "#000000",
+                    colorLight: "#ffffff",
+                    correctLevel: QRCode.CorrectLevel.L
+                });
+            };
+        }
+        
+        // ---------- IMPORT QR CODE LOGIC ----------
+        let html5QrCode = null;
+        let pendingImportData = null;
+        
+        function openImportModal() {
+            closeModal('control-dropdown');
+            document.getElementById('import-preview-section').style.display = 'none';
+            document.getElementById('import-streams-list').innerHTML = '';
+            document.getElementById('import-modal').style.display = 'block';
+        
+            // Start camera feed scanner
+            html5QrCode = new Html5Qrcode("reader");
+            html5QrCode.start(
+                { facingMode: "environment" },
+                { fps: 10, qrbox: { width: 220, height: 220 } },
+                (decodedText) => {
+                    handleScannedPayload(decodedText);
+                },
+                (errorMessage) => {
+                    // Ignore scan-frame misses silently
+                }
+            ).catch(err => {
+                console.error("Camera initialization failed:", err);
+                alert("Unable to access camera hardware for optical data link scan.");
+            });
+        }
+        
+        function closeImportModal() {
+            if (html5QrCode && html5QrCode.isScanning) {
+                html5QrCode.stop().then(() => {
+                    html5QrCode.clear();
+                    document.getElementById('import-modal').style.display = 'none';
+                }).catch(err => console.error("Failed to stop scanner:", err));
+            } else {
+                document.getElementById('import-modal').style.display = 'none';
+            }
+        }
+        
+        function handleScannedPayload(rawText) {
+            try {
+                const parsed = JSON.parse(rawText);
+                if (!parsed.infocpu_packet || !Array.isArray(parsed.infocpu_packet)) {
+                    throw new Error("Invalid transmission schema");
+                }
+        
+                pendingImportData = parsed.infocpu_packet;
+        
+                // Stop camera once verified stream packet is locked
+                if (html5QrCode && html5QrCode.isScanning) {
+                    html5QrCode.stop().then(() => html5QrCode.clear());
+                }
+        
+                const listEl = document.getElementById('import-streams-list');
+                listEl.innerHTML = "";
+                pendingImportData.forEach((stream, index) => {
+                    const div = document.createElement('div');
+                    div.style.margin = "4px 0";
+                    div.innerHTML = `<strong>[${index + 1}] ${escapeHtml(stream.name)}</strong><br><span style="color:#aaa; font-size:0.75rem;">${escapeHtml(stream.url)}</span>`;
+                    listEl.appendChild(div);
+                });
+        
+                document.getElementById('import-preview-section').style.display = 'block';
+            } catch (err) {
+                console.warn("Foreign/corrupt optical packet parsed:", err);
+            }
+        }
+        
+        function confirmAndExecuteImport() {
+            if (!pendingImportData || pendingImportData.length === 0) return;
+        
+            const tx = db.transaction(["sources"], "readwrite");
+            const store = tx.objectStore("sources");
+        
+            pendingImportData.forEach(stream => {
+                store.add({
+                    name: stream.name,
+                    url: stream.url,
+                    titleElement: stream.titleElement || "title",
+                    descriptionElement: stream.descriptionElement || "description",
+                    linkElement: stream.linkElement || "link",
+                    thumbnailElement: stream.thumbnailElement || "image",
+                    lastChecked: 0 // force background fetch trigger
+                });
+            });
+        
+            tx.oncomplete = () => {
+                pendingImportData = null;
+                closeImportModal();
+                initializeApp();
+            };
         }
     </script>
 </body>
