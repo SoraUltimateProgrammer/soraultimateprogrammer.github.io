@@ -355,17 +355,12 @@
                 <label>API / Feed URL</label>
                 <input type="url" id="source-url" placeholder="API/Feed GET Request URL" required>
 
-                <label>Title Element</label>
-                <input type="text" id="title-element" placeholder="e.g., title" required>
-
-                <label>Description Element</label>
-                <input type="text" id="description-element" placeholder="e.g., description" required>
-
-                <label>Link Element</label>
-                <input type="text" id="link-element" placeholder="e.g., link or url" required>
-
-                <label>Thumbnail Element</label>
-                <input type="text" id="thumbnail-element" placeholder="e.g., image or thumbnail" required>
+                <div style="display:none;">
+                    <input type="text" id="title-element" value="title">
+                    <input type="text" id="description-element" value="description">
+                    <input type="text" id="link-element" value="link">
+                    <input type="text" id="thumbnail-element" value="image">
+                </div>
 
                 <button type="submit" class="submit-btn">EXECUTE STREAM LINK</button>
             </form>
@@ -397,17 +392,13 @@
                 <label>API / Feed URL</label>
                 <input type="url" id="edit-url" required>
 
-                <label>Title Element</label>
-                <input type="text" id="edit-title-element" required>
 
-                <label>Description Element</label>
-                <input type="text" id="edit-description-element" required>
-
-                <label>Link Element</label>
-                <input type="text" id="edit-link-element" required>
-
-                <label>Thumbnail Element</label>
-                <input type="text" id="edit-thumbnail-element" required>
+                <div style="display:none;">
+                    <input type="text" id="title-element" value="title">
+                    <input type="text" id="description-element" value="description">
+                    <input type="text" id="link-element" value="link">
+                    <input type="text" id="thumbnail-element" value="image">
+                </div>
 
                 <button type="submit" class="submit-btn">UPDATE STREAM</button>
             </form>
@@ -417,7 +408,7 @@
     <div id="feed-container"></div>
 
     <footer>
-        [CURRENT VERSION: ALPHA-6]
+        [CURRENT VERSION: ALPHA-7]
     </footer>
 
     <script>
@@ -754,7 +745,17 @@
                         // Clean up text entities and strip HTML tags from snippet preview
                         const cleanTitle = decodeHtmlEntities(art.title);
                         const rawDesc = decodeHtmlEntities(art.description).replace(/<[^>]*>?/gm, '');
-                        const shortDesc = rawDesc.substring(0, 100);
+                        
+                        // Smart truncation: cut around 100 chars, then scan forward to the next sentence-ending punctuation (. ! ?)
+                        let shortDesc = rawDesc.substring(0, 100);
+                        if (rawDesc.length > 100) {
+                            const nextPunctuation = rawDesc.slice(100).search(/[.!?]/);
+                            if (nextPunctuation !== -1) {
+                                shortDesc = rawDesc.substring(0, 100 + nextPunctuation + 1);
+                            } else {
+                                shortDesc = rawDesc.substring(0, 100) + '...';
+                            }
+                        }
 
                         card.innerHTML = `
                             <span class="source-tag">[SOURCE: ${escapeHtml(art.sourceName)}]</span>
