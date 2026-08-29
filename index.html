@@ -166,6 +166,27 @@ p.subtitle { margin: 5px 0 0; font-size: 0.8rem; opacity: 0.8; }
     padding-left: 22px;
 }
 
+.submenu-toggle {
+    display: block !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    text-align: left !important;
+    background: var(--hud-bg) !important;
+    border: none !important;
+    border-bottom: 1px solid var(--hud-border) !important;
+    color: var(--hud-blue) !important;
+    padding: 12px 16px !important;
+    font-family: inherit !important;
+    cursor: pointer !important;
+    transition: background 0.15s ease, padding-left 0.15s ease !important;
+    margin: 0 !important;
+}
+
+.submenu-toggle:hover {
+    background: var(--hud-panel) !important;
+    padding-left: 22px !important;
+}
+
 .dropdown.active .dropdown-content {
     opacity: 1;
     visibility: visible;
@@ -403,19 +424,16 @@ footer {
         <div class="dropdown" id="control-dropdown">
             <button class="hud-btn" onclick="toggleDropdown()">SYSTEM COMMANDS ▼</button>
             <div class="dropdown-content" id="control-menu">
-                <button onclick="openAddModal()">+ Add New Stream</button>
-                <button onclick="openModifyModal()">Modify Streams</button>
-                <button onclick="openSettingsModal()">⚙️ Settings</button>
-                <button class="hud-btn" onclick="toggleVoiceCommand()" id="mic-btn" title="Voice Command">🎙️ VOICE MODE</button>
-                <div class="dropdown-submenu-container">
-                        <button class="submenu-toggle" onclick="toggleDataLinkMenu(event)">Engage Data Link ▼</button>
-                        <div id="datalink-sub-menu" class="submenu-content" style="display:none; padding-left: 10px;">
-                            <button onclick="openExportModal()">📤 Export via QR Code</button>
-                            <button onclick="openImportModal()">📥 Import via QR Code</button>
-                            <button onclick="openWebRtcExportModal()">🌐 P2P Export (WebRTC)</button>
-                            <button onclick="openWebRtcImportModal()">🌐 P2P Import (WebRTC)</button>
-                        </div>
-                    </div>
+                <button onclick="openAddModal(); closeDropdown();">+ Add New Stream</button>
+                <button onclick="openModifyModal(); closeDropdown();">Modify Streams</button>
+                <button onclick="openSettingsModal(); closeDropdown();">⚙️ Settings</button>
+                <button onclick="toggleVoiceCommand(); closeDropdown();" id="mic-btn" title="Voice Command" style="background: var(--hud-panel); border: 1px solid var(--hud-border); color: var(--hud-blue); padding: 12px 16px; font-family: inherit; cursor: pointer; transition: background 0.15s ease, padding-left 0.15s ease; width: 100%; box-sizing: border-box; text-align: left; display: block; border-bottom: 1px solid var(--hud-border);">🎙️ VOICE MODE</button>
+                <button onclick="toggleDataLinkMenu(event);" class="submenu-toggle">Engage Data Link ▼</button>
+                <div id="datalink-sub-menu" class="submenu-content" style="display:none;">
+                    <button onclick="openExportModal(); closeDropdown();">📤 Export via QR Code</button>
+                    <button onclick="openImportModal(); closeDropdown();">📥 Import via QR Code</button>
+                    <button onclick="openWebRtcExportModal(); closeDropdown();">🌐 P2P Export (WebRTC)</button>
+                    <button onclick="openWebRtcImportModal(); closeDropdown();">🌐 P2P Import (WebRTC)</button>
                 </div>
             </div>
         </div>
@@ -605,7 +623,7 @@ footer {
     <div id="feed-container"></div>
 
     <footer>
-        [CURRENT VERSION: ALPHA-10]
+        [CURRENT VERSION: ALPHA-9]
     </footer>
 
     <script>
@@ -1095,8 +1113,10 @@ footer {
         // Toggle sub-menu expansion
         function toggleDataLinkMenu(e) {
             e.stopPropagation();
+            e.preventDefault();
             const subMenu = document.getElementById('datalink-sub-menu');
-            subMenu.style.display = subMenu.style.display === 'none' ? 'block' : 'none';
+            const isHidden = subMenu.style.display === 'none' || !subMenu.style.display;
+            subMenu.style.display = isHidden ? 'block' : 'none';
         }
         
         // ---------- EXPORT QR CODE LOGIC ----------
