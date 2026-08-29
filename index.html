@@ -381,9 +381,8 @@ footer {
                 <button onclick="openAddModal()">+ Add New Stream</button>
                 <button onclick="openModifyModal()">Modify Streams</button>
                 <button onclick="openSettingsModal()">⚙️ Settings</button>
+                <button class="hud-btn" onclick="toggleVoiceCommand()" id="mic-btn" title="Voice Command">🎙️ VOICE MODE</button>
                 <div class="dropdown-submenu-container">
-                    <button class="submenu-toggle" onclick="toggleDataLinkMenu(event)">Engage Data Link ▼</button>
-                    <div class="dropdown-submenu-container">
                         <button class="submenu-toggle" onclick="toggleDataLinkMenu(event)">Engage Data Link ▼</button>
                         <div id="datalink-sub-menu" class="submenu-content" style="display:none; padding-left: 10px;">
                             <button onclick="openExportModal()">📤 Export via QR Code</button>
@@ -1435,6 +1434,153 @@ footer {
                     console.error("Failed to parse incoming P2P package:", err);
                 }
             };
+        }
+
+        // ---------- VOICE COMMAND ENGINE (SPEECH-TO-TEXT) ----------
+        let recognition = null;
+        let isListening = false;
+
+        function toggleVoiceCommand() {
+            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+            if (!SpeechRecognition) {
+                alert("Speech Recognition is not supported by your browser. Try Google Chrome.");
+                return;
+            }
+
+            const micBtn = document.getElementById('mic-btn');
+
+            if (isListening) {
+                recognition.stop();
+                return;
+            }
+
+            recognition = new SpeechRecognition();
+            recognition.continuous = false; // stops automatically after a long pause
+            recognition.interimResults = false;
+            recognition.lang = 'en-US';
+
+            recognition.onstart = () => {
+                isListening = true;
+                micBtn.style.background = "#ff3366";
+                micBtn.style.color = "#fff";
+                micBtn.innerText = "🎙️ LISTENING...";
+            };
+
+            recognition.onresult = (event) => {
+                const speechText = event.results[0][0].transcript.trim();
+                console.log("Voice Command Captured:", speechText);
+                processVoiceCommand(speechText);
+            };
+
+            recognition.onerror = (event) => {
+                console.warn("Speech recognition error:", event.error);
+            };
+
+            recognition.onend = () => {
+                isListening = false;
+                micBtn.style.background = "";
+                micBtn.style.color = "";
+                micBtn.innerText = "🎙️ VOICE CMD";
+            };
+
+            try {
+                recognition.start();
+            } catch (err) {
+                console.error("Mic start failed:", err);
+            }
+        }
+
+        async function processVoiceCommand(commandText) {
+            const lowerText = commandText.toLowerCase();
+            let actionType = null;
+
+            if (lowerText.startsWith("read")) {
+                actionType = "read";
+            } else if (lowerText.startsWith("open")) {
+                actionType = "open";
+            } else {
+                alert(`Voice command not recognized. Say "Read [topic]" or "Open [topic]". You said: "${commandText}"`);
+                return;
+            }
+
+            // Extract search query by stripping the keyword ("read" or "open")
+            const query = lowerText.replace(/^(read|open)\s+/, "").trim();
+            if (!query) {
+                alert("No article topic specified in command.");
+                return;
+            }
+
+            // Fetch current articles loaded in IndexedDB to find the best match
+            const articles = await getAllStoredArticles();
+            if (articles.length === 0) {
+                alert("No articles currently loaded in the feed to search through.");
+                return;
+            }
+
+            const bestMatch = findBestArticleMatch(query, articles);
+            if (!bestMatch) {
+                alert(`No matching news article found for: "${query}"`);
+                return;
+            }
+
+            if (actionType === "read") {
+                speakArticle(bestMatch);
+            } else if (actionType === "open") {
+                window.open(bestMatch.link, '_blank');
+            }
+        }
+
+        function getAllStoredArticles() {
+            return new Promise((resolve) => {
+                const tx = db.transaction(["articles"], "readonly");
+                tx.objectStore("articles").getAll().onsuccess = (e) => {
+                    resolve(e.target.result || []);
+                };
+            });
+        }
+
+        function findBestArticleMatch(queryWords, articles) {
+            const searchTokens = queryWords.split(/\s+/);
+            let bestScore = -1;
+            let bestArticle = null;
+
+            articles.forEach(art => {
+                const titleText = (art.title || "").toLowerCase();
+                let score = 0;
+
+                searchTokens.forEach(token => {
+                    if (token.length > 2 && titleText.includes(token)) {
+                        score += 2; // heavier weight for title matches
+                    }
+                });
+
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestArticle = art;
+                }
+            });
+
+            // Fallback to first article if words match loosely, otherwise ensure minimum relevance
+            return bestScore > 0 ? bestArticle : articles[0];
+        }
+
+        function speakArticle(article) {
+            if (!window.speechSynthesis) {
+                alert("Text-to-speech is not supported by your browser.");
+                return;
+            }
+
+            window.speechSynthesis.cancel(); // stop any ongoing speech
+
+            const cleanTitle = decodeHtmlEntities(article.title);
+            const cleanDesc = decodeHtmlEntities(article.description).replace(/<[^>]*>?/gm, '');
+            const utteranceText = `News article match: ${cleanTitle}. Summary: ${cleanDesc}`;
+
+            const utterance = new SpeechSynthesisUtterance(utteranceText);
+            utterance.rate = 1.0;
+            utterance.pitch = 1.0;
+
+            window.speechSynthesis.speak(utterance);
         }
     </script>
 </body>
