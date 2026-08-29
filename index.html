@@ -673,25 +673,24 @@ footer {
         }
 
         function openEditModal(id) {
-            const tx = db.transaction(["sources"], "readonly");
-            tx.objectStore("sources").get(id).onsuccess = (e) => {
-                const source = e.target.result;
-                if (!source) return;
+    const tx = db.transaction(["sources"], "readonly");
 
-                document.getElementById('edit-id').value = source.id;
-                document.getElementById('edit-name').value = source.name || "";
-                document.getElementById('edit-url').value = source.url || "";
-                document.getElementById('edit-filter-regex').value = source.filterRegex || "";
-                document.getElementById('edit-whitelist-regex').value = source.whitelistRegex || "";
-                document.getElementById('edit-title-element').value = source.titleElement || "";
-                document.getElementById('edit-description-element').value = source.descriptionElement || "";
-                document.getElementById('edit-link-element').value = source.linkElement || "";
-                document.getElementById('edit-thumbnail-element').value = source.thumbnailElement || "";
+    tx.objectStore("sources").get(id).onsuccess = (e) => {
+        const source = e.target.result;
+        if (!source) return;
 
-                closeModal('modify-modal');
-                document.getElementById('edit-modal').style.display = "block";
-            };
-        }
+        document.getElementById('edit-id').value = source.id;
+        document.getElementById('edit-name').value = source.name || "";
+        document.getElementById('edit-url').value = source.url || "";
+        document.getElementById('edit-filter-regex').value =
+            source.filterRegex || "";
+        document.getElementById('edit-whitelist-regex').value =
+            source.whitelistRegex || "";
+
+        closeModal('modify-modal');
+        document.getElementById('edit-modal').style.display = "block";
+    };
+}
 
         document.getElementById('edit-form').addEventListener('submit', async (e) => {
             e.preventDefault();
