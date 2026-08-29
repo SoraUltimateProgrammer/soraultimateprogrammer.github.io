@@ -60,7 +60,7 @@
 
         p.subtitle { margin: 5px 0 0; font-size: 0.8rem; opacity: 0.8; }
 
-        /* Dropdown Menu Container */
+        /* Dropdown */
         .dropdown {
             position: relative;
             display: inline-block;
@@ -101,10 +101,7 @@
             visibility: hidden;
             transform: translateY(-10px) scaleY(0.9);
             transform-origin: top;
-            transition:
-                opacity 0.2s ease,
-                transform 0.25s ease,
-                visibility 0.25s ease;
+            transition: opacity 0.2s ease, transform 0.25s ease, visibility 0.25s ease;
         }
 
         .dropdown-content button {
@@ -119,18 +116,13 @@
             padding: 12px 16px;
             font-family: inherit;
             cursor: pointer;
-            transition:
-                background 0.15s ease,
-                padding-left 0.15s ease,
-                box-shadow 0.15s ease;
+            transition: background 0.15s ease, padding-left 0.15s ease, box-shadow 0.15s ease;
         }
 
         .dropdown-content button:hover {
             background: var(--hud-panel);
             padding-left: 22px;
-            box-shadow:
-                inset 3px 0 0 var(--hud-blue),
-                0 0 10px rgba(0, 243, 255, 0.15);
+            box-shadow: inset 3px 0 0 var(--hud-blue), 0 0 10px rgba(0, 243, 255, 0.15);
         }
 
         .dropdown.active .dropdown-content {
@@ -139,7 +131,7 @@
             transform: translateY(0) scaleY(1);
         }
 
-        /* Modal Overlay */
+        /* Modal */
         .modal {
             display: none;
             position: fixed;
@@ -155,10 +147,10 @@
         .modal-content {
             background: var(--hud-bg);
             border: 1px solid var(--hud-blue);
-            margin: 8% auto;
+            margin: 6% auto;
             padding: 20px;
             width: 90%;
-            max-width: 480px;
+            max-width: 520px;
             box-shadow: var(--text-glow);
             position: relative;
             max-height: 85vh;
@@ -204,7 +196,76 @@
             cursor: pointer;
         }
 
-        /* Feed Grid Styling */
+        /* Source list (Modify Streams) */
+        .source-list {
+            margin-top: 15px;
+        }
+
+        .source-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 10px;
+            border: 1px solid var(--hud-border);
+            margin-bottom: 8px;
+            background: var(--hud-panel);
+            gap: 10px;
+        }
+
+        .source-item-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .source-item-name {
+            font-weight: bold;
+            margin-bottom: 3px;
+        }
+
+        .source-item-url {
+            font-size: 0.7rem;
+            opacity: 0.6;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .source-item-actions {
+            display: flex;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+
+        .source-item-actions button {
+            background: transparent;
+            border: 1px solid var(--hud-blue);
+            color: var(--hud-blue);
+            padding: 6px 10px;
+            font-family: inherit;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .source-item-actions button:hover {
+            background: var(--hud-blue);
+            color: var(--hud-bg);
+        }
+
+        .source-item-actions button.delete-btn:hover {
+            background: #ff3366;
+            border-color: #ff3366;
+            color: #fff;
+        }
+
+        .empty-list {
+            text-align: center;
+            opacity: 0.6;
+            padding: 30px 10px;
+            font-size: 0.9rem;
+        }
+
+        /* Feed */
         #feed-container {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -254,7 +315,6 @@
             display: block;
         }
 
-        /* Footer */
         footer {
             margin-top: 30px;
             padding-top: 15px;
@@ -276,16 +336,17 @@
         <div class="dropdown" id="control-dropdown">
             <button class="hud-btn" onclick="toggleDropdown()">SYSTEM COMMANDS ▼</button>
             <div class="dropdown-content">
-                <button onclick="openModal()">+ Add New Stream</button>
-                <button onclick="alert('Module offline: Modify streams coming soon.')">⚙ Modify Streams</button>
+                <button onclick="openAddModal()">+ Add New Stream</button>
+                <button onclick="openModifyModal()">⚙ Modify Streams</button>
                 <button onclick="alert('Module offline: QR import coming soon.')">📷 Import via QR</button>
             </div>
         </div>
     </header>
 
-    <div id="stream-modal" class="modal">
+    <!-- ADD NEW STREAM MODAL -->
+    <div id="add-modal" class="modal">
         <div class="modal-content">
-            <span class="close-modal" onclick="closeModal()">&times;</span>
+            <span class="close-modal" onclick="closeModal('add-modal')">&times;</span>
             <h3>// INITIALIZE NEW STREAM</h3>
             <form id="source-form">
                 <label>Source Name</label>
@@ -311,17 +372,59 @@
         </div>
     </div>
 
+    <!-- MODIFY STREAMS MODAL (list) -->
+    <div id="modify-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeModal('modify-modal')">&times;</span>
+            <h3>// MODIFY STREAMS</h3>
+            <div id="source-list" class="source-list">
+                <!-- populated by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- EDIT STREAM MODAL -->
+    <div id="edit-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeModal('edit-modal')">&times;</span>
+            <h3>// EDIT STREAM</h3>
+            <form id="edit-form">
+                <input type="hidden" id="edit-id">
+
+                <label>Source Name</label>
+                <input type="text" id="edit-name" required>
+
+                <label>API / Feed URL</label>
+                <input type="url" id="edit-url" required>
+
+                <label>Title Element</label>
+                <input type="text" id="edit-title-element" required>
+
+                <label>Description Element</label>
+                <input type="text" id="edit-description-element" required>
+
+                <label>Link Element</label>
+                <input type="text" id="edit-link-element" required>
+
+                <label>Thumbnail Element</label>
+                <input type="text" id="edit-thumbnail-element" required>
+
+                <button type="submit" class="submit-btn">UPDATE STREAM</button>
+            </form>
+        </div>
+    </div>
+
     <div id="feed-container"></div>
 
     <footer>
-        [CURRENT VERSION: ALPHA-3]
+        [CURRENT VERSION: ALPHA-4]
     </footer>
 
     <script>
         const AWS_API_ENDPOINT = "YOUR_API_GATEWAY_URL_HERE";
         let db;
 
-        // UI Handlers for Dropdown & Modal
+        // ---------- UI helpers ----------
         function toggleDropdown() {
             document.getElementById('control-dropdown').classList.toggle('active');
         }
@@ -330,23 +433,27 @@
             if (!event.target.matches('.hud-btn')) {
                 const dropdowns = document.getElementsByClassName("dropdown");
                 for (let i = 0; i < dropdowns.length; i++) {
-                    let openDropdown = dropdowns[i];
-                    if (openDropdown.classList.contains('active')) {
-                        openDropdown.classList.remove('active');
+                    if (dropdowns[i].classList.contains('active')) {
+                        dropdowns[i].classList.remove('active');
                     }
                 }
             }
         }
 
-        function openModal() {
-            document.getElementById('stream-modal').style.display = "block";
+        function openAddModal() {
+            document.getElementById('add-modal').style.display = "block";
         }
 
-        function closeModal() {
-            document.getElementById('stream-modal').style.display = "none";
+        function openModifyModal() {
+            renderSourceList();
+            document.getElementById('modify-modal').style.display = "block";
         }
 
-        // IndexedDB Initialization
+        function closeModal(id) {
+            document.getElementById(id).style.display = "none";
+        }
+
+        // ---------- IndexedDB ----------
         const request = indexedDB.open("InformationCPUDB", 1);
         
         request.onerror = (event) => console.error("IndexedDB error:", event.target.error);
@@ -372,46 +479,173 @@
             renderInterleavedFeed();
         }
 
-        // Handle Form Submission
+        // ---------- Add source ----------
         document.getElementById('source-form').addEventListener('submit', async (e) => {
             e.preventDefault();
 
-            const name = document.getElementById('source-name').value.trim();
-            const url = document.getElementById('source-url').value.trim();
-            const titleElement = document.getElementById('title-element').value.trim();
-            const descriptionElement = document.getElementById('description-element').value.trim();
-            const linkElement = document.getElementById('link-element').value.trim();
-            const thumbnailElement = document.getElementById('thumbnail-element').value.trim();
-
-            const transaction = db.transaction(["sources"], "readwrite");
-            const store = transaction.objectStore("sources");
-
-            store.add({
-                name,
-                url,
-                titleElement,
-                descriptionElement,
-                linkElement,
-                thumbnailElement,
+            const source = {
+                name: document.getElementById('source-name').value.trim(),
+                url: document.getElementById('source-url').value.trim(),
+                titleElement: document.getElementById('title-element').value.trim(),
+                descriptionElement: document.getElementById('description-element').value.trim(),
+                linkElement: document.getElementById('link-element').value.trim(),
+                thumbnailElement: document.getElementById('thumbnail-element').value.trim(),
                 lastChecked: 0
-            });
+            };
 
-            transaction.oncomplete = () => {
+            const tx = db.transaction(["sources"], "readwrite");
+            tx.objectStore("sources").add(source);
+
+            tx.oncomplete = () => {
                 document.getElementById('source-form').reset();
-                closeModal();
+                closeModal('add-modal');
                 initializeApp();
             };
         });
 
-        // 1-hour freshness logic and AWS backend interaction
+        // ---------- Modify / Edit / Delete ----------
+        function renderSourceList() {
+            const listEl = document.getElementById('source-list');
+            listEl.innerHTML = "";
+
+            const tx = db.transaction(["sources"], "readonly");
+            tx.objectStore("sources").getAll().onsuccess = (e) => {
+                const sources = e.target.result;
+
+                if (sources.length === 0) {
+                    listEl.innerHTML = `<div class="empty-list">No streams configured.<br>Use “+ Add New Stream” to begin.</div>`;
+                    return;
+                }
+
+                sources.forEach(source => {
+                    const item = document.createElement('div');
+                    item.className = "source-item";
+                    item.innerHTML = `
+                        <div class="source-item-info">
+                            <div class="source-item-name">${escapeHtml(source.name)}</div>
+                            <div class="source-item-url">${escapeHtml(source.url)}</div>
+                        </div>
+                        <div class="source-item-actions">
+                            <button onclick="openEditModal(${source.id})">Edit</button>
+                            <button class="delete-btn" onclick="deleteSource(${source.id}, '${escapeHtml(source.name)}')">Delete</button>
+                        </div>
+                    `;
+                    listEl.appendChild(item);
+                });
+            };
+        }
+
+        function openEditModal(id) {
+            const tx = db.transaction(["sources"], "readonly");
+            tx.objectStore("sources").get(id).onsuccess = (e) => {
+                const source = e.target.result;
+                if (!source) return;
+
+                document.getElementById('edit-id').value = source.id;
+                document.getElementById('edit-name').value = source.name || "";
+                document.getElementById('edit-url').value = source.url || "";
+                document.getElementById('edit-title-element').value = source.titleElement || "";
+                document.getElementById('edit-description-element').value = source.descriptionElement || "";
+                document.getElementById('edit-link-element').value = source.linkElement || "";
+                document.getElementById('edit-thumbnail-element').value = source.thumbnailElement || "";
+
+                closeModal('modify-modal');
+                document.getElementById('edit-modal').style.display = "block";
+            };
+        }
+
+        document.getElementById('edit-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const id = Number(document.getElementById('edit-id').value);
+
+            const tx = db.transaction(["sources"], "readwrite");
+            const store = tx.objectStore("sources");
+
+            store.get(id).onsuccess = (ev) => {
+                const source = ev.target.result;
+                if (!source) return;
+
+                const oldUrl = source.url;
+                const oldMappings = JSON.stringify({
+                    t: source.titleElement,
+                    d: source.descriptionElement,
+                    l: source.linkElement,
+                    th: source.thumbnailElement
+                });
+
+                source.name = document.getElementById('edit-name').value.trim();
+                source.url = document.getElementById('edit-url').value.trim();
+                source.titleElement = document.getElementById('edit-title-element').value.trim();
+                source.descriptionElement = document.getElementById('edit-description-element').value.trim();
+                source.linkElement = document.getElementById('edit-link-element').value.trim();
+                source.thumbnailElement = document.getElementById('edit-thumbnail-element').value.trim();
+
+                const newMappings = JSON.stringify({
+                    t: source.titleElement,
+                    d: source.descriptionElement,
+                    l: source.linkElement,
+                    th: source.thumbnailElement
+                });
+
+                // Force re-fetch if URL or field mappings changed
+                if (source.url !== oldUrl || newMappings !== oldMappings) {
+                    source.lastChecked = 0;
+                }
+
+                store.put(source);
+            };
+
+            tx.oncomplete = async () => {
+                // If mappings/URL changed we may want to clear old articles for this source
+                // so the next fetch uses the new field names cleanly
+                await clearArticlesForSource(id);
+                closeModal('edit-modal');
+                initializeApp();
+            };
+        });
+
+        async function deleteSource(id, name) {
+            if (!confirm(`Delete stream "${name}" and all its articles?`)) return;
+
+            // Delete the source
+            const tx1 = db.transaction(["sources"], "readwrite");
+            tx1.objectStore("sources").delete(id);
+
+            await new Promise(res => tx1.oncomplete = res);
+
+            // Delete all articles belonging to this source
+            await clearArticlesForSource(id);
+
+            renderSourceList();   // refresh the list while modal is still open
+            initializeApp();      // refresh the feed
+        }
+
+        function clearArticlesForSource(sourceId) {
+            return new Promise((resolve) => {
+                const tx = db.transaction(["articles"], "readwrite");
+                const store = tx.objectStore("articles");
+                const index = store.index("sourceId");
+                const request = index.openCursor(IDBKeyRange.only(sourceId));
+
+                request.onsuccess = (e) => {
+                    const cursor = e.target.result;
+                    if (cursor) {
+                        cursor.delete();
+                        cursor.continue();
+                    }
+                };
+
+                tx.oncomplete = () => resolve();
+            });
+        }
+
+        // ---------- Fetching & Parsing ----------
         function syncSourcesAndFetch() {
             return new Promise((resolve) => {
-                const transaction = db.transaction(["sources"], "readonly");
-                const store = transaction.objectStore("sources");
-                const request = store.getAll();
-
-                request.onsuccess = async () => {
-                    const sources = request.result;
+                const tx = db.transaction(["sources"], "readonly");
+                tx.objectStore("sources").getAll().onsuccess = async (e) => {
+                    const sources = e.target.result;
                     const now = Date.now();
                     const oneHour = 60 * 60 * 1000;
 
@@ -433,14 +667,13 @@
 
                 const tx = db.transaction(["articles", "sources"], "readwrite");
                 const artStore = tx.objectStore("articles");
-                
                 articles.forEach(art => artStore.add(art));
 
                 const srcStore = tx.objectStore("sources");
                 source.lastChecked = Date.now();
                 srcStore.put(source);
 
-                await new Promise((res) => tx.oncomplete = res);
+                await new Promise(res => tx.oncomplete = res);
             } catch (err) {
                 console.error(`Failed to fetch source ${source.name}:`, err);
             }
@@ -466,7 +699,7 @@
             }));
         }
 
-        // Interleaving Sources (ABCABC pattern)
+        // ---------- Render feed ----------
         function renderInterleavedFeed() {
             const tx = db.transaction(["sources", "articles"], "readonly");
             const sourceStore = tx.objectStore("sources");
@@ -484,7 +717,7 @@
                     });
 
                     const interleaved = [];
-                    let maxLength = Math.max(...Object.values(grouped).map(arr => arr.length), 0);
+                    const maxLength = Math.max(...Object.values(grouped).map(arr => arr.length), 0);
 
                     for (let i = 0; i < maxLength; i++) {
                         sources.forEach(s => {
@@ -501,15 +734,26 @@
                         const card = document.createElement('div');
                         card.className = "news-card";
                         card.innerHTML = `
-                            <span class="source-tag">[SOURCE: ${art.sourceName}]</span>
+                            <span class="source-tag">[SOURCE: ${escapeHtml(art.sourceName)}]</span>
                             <img src="${art.image}" alt="Thumbnail" onerror="this.src='https://via.placeholder.com/300x150?text=ERROR'">
-                            <h3><a href="${art.link}" target="_blank">${art.title}</a></h3>
-                            <p>${(art.description || "").substring(0, 100)}...</p>
+                            <h3><a href="${art.link}" target="_blank">${escapeHtml(art.title)}</a></h3>
+                            <p>${escapeHtml((art.description || "").substring(0, 100))}...</p>
                         `;
                         container.appendChild(card);
                     });
                 };
             };
+        }
+
+        // Simple HTML escape to avoid XSS from source names / titles
+        function escapeHtml(str) {
+            if (!str) return "";
+            return String(str)
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
         }
     </script>
 </body>
