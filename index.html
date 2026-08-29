@@ -417,36 +417,39 @@
         </div>
     </div>
 
-    <div id="export-modal" class="modal" style="display:none;">
+    <!-- Export via QR Modal -->
+<div id="export-modal" class="modal" style="display:none;">
     <div class="modal-content">
         <span class="close" onclick="closeModal('export-modal')">&times;</span>
         <h2>Export Streams via QR Code</h2>
-        <p style="font-size: 0.85rem; color: #aaa;">Select the data streams you wish to compile into a transmission sequence:</p>
+        <p style="font-size: 0.85rem; color: #aaa; margin-bottom: 10px;">Select the data streams you wish to compile into a transmission sequence:</p>
         
-        <div id="export-source-checkboxes" style="max-height: 150px; overflow-y: auto; margin: 10px 0; border: 1px solid rgba(255,255,255,0.1); padding: 8px;">
-            </div>
+        <div id="export-source-checkboxes" style="max-height: 150px; overflow-y: auto; margin: 10px 0; border: 1px solid rgba(255,255,255,0.1); padding: 8px; text-align: left;">
+            <!-- Dynamically populated stream checkboxes -->
+        </div>
         
-        <button onclick="generateExportQRCode()">Generate Transmission QR</button>
+        <button onclick="generateExportQRCode()" style="width: 100%; margin-top: 10px;">Generate Transmission QR</button>
         
         <div id="qrcode-display-area" style="display:flex; justify-content:center; margin-top: 15px; background: white; padding: 10px; border-radius: 4px;"></div>
     </div>
 </div>
 
+<!-- Import via QR Modal -->
 <div id="import-modal" class="modal" style="display:none;">
     <div class="modal-content">
-        <span class="close" onclick="closeImportModal()">×</span>
+        <span class="close" onclick="closeImportModal()">&times;</span>
         <h2>Import Streams via QR Code</h2>
         
-        <div id="reader" style="width: 100%; max-width: 300px; margin: 0 auto;"></div>
+        <div id="reader" style="width: 100%; max-width: 280px; margin: 10px auto;"></div>
         
         <div id="import-preview-section" style="display:none; margin-top: 15px;">
             <p style="font-size: 0.85rem; color: #4ade80;">Incoming Data Packet Detected. Confirm payload contents:</p>
             <div id="import-streams-list" style="max-height: 120px; overflow-y: auto; background: rgba(0,0,0,0.3); padding: 8px; margin: 8px 0; font-size: 0.85rem; text-align: left;"></div>
-            <button onclick="confirmAndExecuteImport()" style="background-color: #22c55e; color: black; font-weight: bold;">Authorize Import</button>
+            <button onclick="confirmAndExecuteImport()" style="width: 100%; background-color: #22c55e; color: black; font-weight: bold; margin-top: 5px;">Authorize Import</button>
         </div>
     </div>
 </div>
-
+    
     <div id="feed-container"></div>
 
     <footer>
@@ -459,17 +462,21 @@
 
         // ---------- UI helpers ----------
         function toggleDropdown() {
-            document.getElementById('control-dropdown').classList.toggle('active');
+            const dropdown = document.getElementById('control-dropdown');
+            dropdown.classList.toggle('active');
         }
 
         window.onclick = function(event) {
-            if (!event.target.matches('.hud-btn')) {
+            if (!event.target.closest('.hud-btn') && !event.target.closest('.dropdown-content') && !event.target.closest('.modal')) {
                 const dropdowns = document.getElementsByClassName("dropdown");
                 for (let i = 0; i < dropdowns.length; i++) {
                     if (dropdowns[i].classList.contains('active')) {
                         dropdowns[i].classList.remove('active');
                     }
                 }
+                // Also close data link sub-menu if clicking away
+                const subMenu = document.getElementById('datalink-sub-menu');
+                if (subMenu) subMenu.style.display = 'none';
             }
         }
 
@@ -841,10 +848,14 @@
         // ---------- EXPORT QR CODE LOGIC ----------
         function openExportModal() {
             closeModal('control-dropdown');
+            const subMenu = document.getElementById('datalink-sub-menu');
+            if (subMenu) subMenu.style.display = 'none';
+        
             const container = document.getElementById('export-source-checkboxes');
             container.innerHTML = "";
-            document.getElementById('qrcode-display-area.innerHTML = "";');
-            document.getElementById('qrcode-display-area').innerHTML = '<span style="color:black; font-size:0.8rem;">Select streams & click generate</span>';
+            
+            const qrContainer = document.getElementById('qrcode-display-area');
+            qrContainer.innerHTML = '<span style="color:#666; font-size:0.8rem;">Select streams & click generate</span>';
         
             const tx = db.transaction(["sources"], "readonly");
             tx.objectStore("sources").getAll().onsuccess = (e) => {
@@ -857,9 +868,10 @@
                 sources.forEach(source => {
                     const label = document.createElement('label');
                     label.style.display = "block";
-                    label.style.margin = "4px 0";
+                    label.style.margin = "6px 0";
                     label.style.fontSize = "0.85rem";
-                    label.innerHTML = `<input type="checkbox" value="${source.id}" checked> ${escapeHtml(source.name)} (${escapeHtml(source.url)})`;
+                    label.style.cursor = "pointer";
+                    label.innerHTML = `<input type="checkbox" value="${source.id}" checked style="margin-right: 6px;"> ${escapeHtml(source.name)}`;
                     container.appendChild(label);
                 });
         
