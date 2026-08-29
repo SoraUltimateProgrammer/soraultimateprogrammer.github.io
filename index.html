@@ -25,41 +25,130 @@
         }
 
         header {
-            text-align: center;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
             border-bottom: 2px solid var(--hud-border);
             padding-bottom: 15px;
             margin-bottom: 20px;
             text-shadow: var(--text-glow);
         }
 
-        h1 { margin: 0; font-size: 2rem; letter-spacing: 2px; }
-        p.subtitle { margin: 5px 0 0; font-size: 0.9rem; opacity: 0.8; }
+        h1 { margin: 0; font-size: 1.8rem; letter-spacing: 2px; }
+        p.subtitle { margin: 5px 0 0; font-size: 0.8rem; opacity: 0.8; }
 
-        .control-panel {
-            background: var(--hud-panel);
-            border: 1px solid var(--hud-border);
-            padding: 15px;
-            margin-bottom: 20px;
-            box-shadow: inset 0 0 15px rgba(0, 243, 255, 0.1);
+        /* Dropdown Menu Container */
+        .dropdown {
+            position: relative;
+            display: inline-block;
         }
 
-        input, button {
+        .hud-btn {
+            background: var(--hud-panel);
+            border: 1px solid var(--hud-blue);
+            color: var(--hud-blue);
+            padding: 10px 16px;
+            font-family: inherit;
+            font-weight: bold;
+            letter-spacing: 1px;
+            cursor: pointer;
+            outline: none;
+            box-shadow: inset 0 0 10px rgba(0, 243, 255, 0.2);
+            transition: all 0.2s ease;
+        }
+
+        .hud-btn:hover {
+            background: var(--hud-blue);
+            color: var(--hud-bg);
+            box-shadow: var(--text-glow);
+        }
+
+        .dropdown-content {
+            display: none;
+            position: absolute;
+            right: 0;
+            background-color: var(--hud-bg);
+            min-width: 200px;
+            border: 1px solid var(--hud-border);
+            box-shadow: 0px 8px 16px 0px rgba(0,243,255,0.2);
+            z-index: 10;
+        }
+
+        .dropdown-content button {
+            width: 100%;
+            text-align: left;
+            background: none;
+            border: none;
+            border-bottom: 1px solid rgba(0, 243, 255, 0.1);
+            color: var(--hud-blue);
+            padding: 12px 16px;
+            font-family: inherit;
+            cursor: pointer;
+        }
+
+        .dropdown-content button:hover {
+            background: var(--hud-panel);
+            box-shadow: none;
+        }
+
+        .dropdown.active .dropdown-content {
+            display: block;
+        }
+
+        /* Modal Overlay */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 100;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(3, 10, 20, 0.85);
+            backdrop-filter: blur(4px);
+        }
+
+        .modal-content {
+            background: var(--hud-bg);
+            border: 1px solid var(--hud-blue);
+            margin: 15% auto;
+            padding: 20px;
+            width: 90%;
+            max-width: 450px;
+            box-shadow: var(--text-glow);
+            position: relative;
+        }
+
+        .close-modal {
+            color: var(--hud-blue);
+            float: right;
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .close-modal:hover { opacity: 0.7; }
+
+        .modal-content input, .modal-content button.submit-btn {
+            width: 100%;
+            box-sizing: border-box;
             background: transparent;
             border: 1px solid var(--hud-blue);
             color: var(--hud-blue);
-            padding: 8px 12px;
-            margin: 5px;
+            padding: 10px;
+            margin: 10px 0;
             font-family: inherit;
             outline: none;
         }
 
-        button:hover {
+        .modal-content button.submit-btn:hover {
             background: var(--hud-blue);
             color: var(--hud-bg);
-            cursor: pointer;
             box-shadow: var(--text-glow);
+            cursor: pointer;
         }
 
+        /* Feed Grid Styling */
         #feed-container {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -70,7 +159,6 @@
             background: var(--hud-panel);
             border: 1px solid var(--hud-border);
             padding: 15px;
-            position: relative;
             transition: all 0.3s ease;
         }
 
@@ -113,17 +201,31 @@
 <body>
 
     <header>
-        <h1>THE INFORMATION CPU</h1>
-        <p class="subtitle">[SYSTEM STATUS: ONLINE // PROTOCOL: JARVIS-HUD]</p>
+        <div>
+            <h1>THE INFORMATION CPU</h1>
+            <p class="subtitle">[SYSTEM STATUS: ONLINE // PROTOCOL: JARVIS-HUD]</p>
+        </div>
+        
+        <div class="dropdown" id="control-dropdown">
+            <button class="hud-btn" onclick="toggleDropdown()">SYSTEM COMMANDS ▼</button>
+            <div class="dropdown-content">
+                <button onclick="openModal()">+ Add New Stream</button>
+                <button onclick="alert('Module offline: Modify streams coming soon.')">⚙ Modify Streams</button>
+                <button onclick="alert('Module offline: QR import coming soon.')">📷 Import via QR</button>
+            </div>
+        </div>
     </header>
 
-    <div class="control-panel">
-        <h3>// ADD NEW DATA STREAM</h3>
-        <form id="source-form">
-            <input type="text" id="source-name" placeholder="Source Name (e.g., TechCrunch)" required>
-            <input type="url" id="source-url" placeholder="API/Feed GET Request URL" required>
-            <button type="submit">INITIALIZE STREAM</button>
-        </form>
+    <div id="stream-modal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeModal()">&times;</span>
+            <h3>// INITIALIZE NEW STREAM</h3>
+            <form id="source-form">
+                <input type="text" id="source-name" placeholder="Source Name (e.g., TechCrunch)" required>
+                <input type="url" id="source-url" placeholder="API/Feed GET Request URL" required>
+                <button type="submit" class="submit-btn">EXECUTE STREAM LINK</button>
+            </form>
+        </div>
     </div>
 
     <div id="feed-container">
@@ -133,7 +235,32 @@
         const AWS_API_ENDPOINT = "YOUR_API_GATEWAY_URL_HERE";
         let db;
 
-        // 1. Initialize IndexedDB
+        // UI Handlers for Dropdown & Modal
+        function toggleDropdown() {
+            document.getElementById('control-dropdown').classList.toggle('active');
+        }
+
+        window.onclick = function(event) {
+            if (!event.target.matches('.hud-btn')) {
+                const dropdowns = document.getElementsByClassName("dropdown");
+                for (let i = 0; i < dropdowns.length; i++) {
+                    let openDropdown = dropdowns[i];
+                    if (openDropdown.classList.contains('active')) {
+                        openDropdown.classList.remove('active');
+                    }
+                }
+            }
+        }
+
+        function openModal() {
+            document.getElementById('stream-modal').style.display = "block";
+        }
+
+        function closeModal() {
+            document.getElementById('stream-modal').style.display = "none";
+        }
+
+        // IndexedDB Initialization
         const request = indexedDB.open("InformationCPUDB", 1);
         
         request.onerror = (event) => console.error("IndexedDB error:", event.target.error);
@@ -159,7 +286,7 @@
             renderInterleavedFeed();
         }
 
-        // Handle Form Submission for New Sources
+        // Handle Form Submission
         document.getElementById('source-form').addEventListener('submit', async (e) => {
             e.preventDefault();
             const name = document.getElementById('source-name').value;
@@ -171,11 +298,12 @@
 
             transaction.oncomplete = () => {
                 document.getElementById('source-form').reset();
+                closeModal();
                 initializeApp();
             };
         });
 
-        // 2. Check 1-hour freshness and fetch via AWS
+        // 1-hour freshness logic and AWS backend interaction
         function syncSourcesAndFetch() {
             return new Promise((resolve) => {
                 const transaction = db.transaction(["sources"], "readonly");
@@ -201,16 +329,11 @@
             try {
                 const response = await fetch(`${AWS_API_ENDPOINT}?url=${encodeURIComponent(source.url)}`);
                 const data = await response.json();
-                
-                // Assume data returns an array of items or custom parsing happens here
-                // Standardizing to: { title, description, image, link }
                 const articles = parseArticles(data, source.id);
 
-                // Save articles & update timestamp
                 const tx = db.transaction(["articles", "sources"], "readwrite");
                 const artStore = tx.objectStore("articles");
                 
-                // Clear old articles for this source first if desired, or append
                 articles.forEach(art => artStore.add(art));
 
                 const srcStore = tx.objectStore("sources");
@@ -223,9 +346,7 @@
             }
         }
 
-        // Helper mapper (customize depending on the JSON structure of your feeds)
         function parseArticles(rawResponse, sourceId) {
-            // Placeholder mapping logic assuming rawResponse is an array of items
             if (!Array.isArray(rawResponse)) return [];
             return rawResponse.slice(0, 10).map(item => ({
                 sourceId: sourceId,
@@ -236,7 +357,7 @@
             }));
         }
 
-        // 3. Interleave Sources (ABCABC pattern)
+        // Interleaving Sources (ABCABC pattern)
         function renderInterleavedFeed() {
             const tx = db.transaction(["sources", "articles"], "readonly");
             const sourceStore = tx.objectStore("sources");
@@ -247,14 +368,12 @@
                 articleStore.getAll().onsuccess = (e) => {
                     const allArticles = e.target.result;
                     
-                    // Group articles by sourceId
                     const grouped = {};
                     sources.forEach(s => grouped[s.id] = []);
                     allArticles.forEach(art => {
                         if (grouped[art.sourceId]) grouped[art.sourceId].push(art);
                     });
 
-                    // Build ABCABC interleave array
                     const interleaved = [];
                     let maxLength = Math.max(...Object.values(grouped).map(arr => arr.length), 0);
 
@@ -266,7 +385,6 @@
                         });
                     }
 
-                    // Render to DOM
                     const container = document.getElementById('feed-container');
                     container.innerHTML = "";
                     
