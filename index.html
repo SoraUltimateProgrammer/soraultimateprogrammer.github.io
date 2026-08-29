@@ -13,20 +13,29 @@
             --hud-panel: rgba(0, 243, 255, 0.05);
             --hud-border: rgba(0, 243, 255, 0.3);
             --text-glow: 0 0 10px rgba(0, 243, 255, 0.5);
+            --hud-font: 'Courier New', Courier, monospace;
+            --grid-pattern: linear-gradient(rgba(0, 243, 255, 0.03) 1px, transparent 1px),
+                            linear-gradient(90deg, rgba(0, 243, 255, 0.03) 1px, transparent 1px);
         }
 
-        body {
-            background-color: var(--hud-bg);
-            color: var(--hud-blue);
-            font-family: 'Courier New', Courier, monospace;
-            margin: 0;
-            padding: 20px;
-            background-image: linear-gradient(rgba(0, 243, 255, 0.03) 1px, transparent 1px),
-                              linear-gradient(90deg, rgba(0, 243, 255, 0.03) 1px, transparent 1px);
-            background-size: 20px 20px;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
+        /* DDLC-Inspired Theme Overrides */
+        body.theme-ddlc {
+            --hud-blue: #ff598f;
+            --hud-bg: #fff0f3;
+            --hud-panel: rgba(255, 89, 143, 0.08);
+            --hud-border: rgba(255, 89, 143, 0.4);
+            --text-glow: 0 0 8px rgba(255, 89, 143, 0.4);
+            --hud-font: 'Comic Sans MS', 'Marker Felt', sans-serif;
+            --grid-pattern: linear-gradient(rgba(255, 89, 143, 0.05) 1px, transparent 1px),
+                            linear-gradient(90deg, rgba(255, 89, 143, 0.05) 1px, transparent 1px);
+        }
+
+        body.theme-ddlc header {
+            border-bottom-style: dashed;
+        }
+
+        body.theme-ddlc .news-card {
+            border-radius: 8px;
         }
 
         header {
@@ -340,8 +349,7 @@
             <div class="dropdown-content" id="control-dropdown">
                 <button onclick="openAddModal()">+ Add New Stream</button>
                 <button onclick="openModifyModal()">Modify Streams</button>
-                <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 4px 0;">
-                
+                <button onclick="openSettingsModal()">⚙️ Settings</button>
                 <div class="dropdown-submenu-container">
                     <button class="submenu-toggle" onclick="toggleDataLinkMenu(event)">Engage Data Link ▼</button>
                     <div id="datalink-sub-menu" class="submenu-content" style="display:none; padding-left: 10px;">
@@ -416,6 +424,21 @@
             </form>
         </div>
     </div>
+
+<div id="settings-modal" class="modal" style="display:none;">
+    <div class="modal-content">
+        <span class="close-modal" onclick="closeModal('settings-modal')">&times;</span>
+        <h3>// SYSTEM CONFIGURATION & THEMES</h3>
+        
+        <label for="theme-selector">Interface Visual Theme</label>
+        <select id="theme-selector" onchange="changeTheme(this.value)" style="width: 100%; box-sizing: border-box; background: var(--hud-bg); border: 1px solid var(--hud-blue); color: var(--hud-blue); padding: 10px; margin: 8px 0; font-family: inherit; outline: none; cursor: pointer;">
+            <option value="jarvis">Round 1 (Default HUD)</option>
+            <option value="ddlc">DDLC (Manga Pink)</option>
+        </select>
+        
+        <p style="font-size: 0.75srem; opacity: 0.7; margin-top: 15px;">Theme preferences are saved automatically and persist locally across sessions.</p>
+    </div>
+</div>
 
     <!-- Export via QR Modal -->
 <div id="export-modal" class="modal" style="display:none;">
@@ -835,6 +858,42 @@
                 .replace(/"/g, "&quot;")
                 .replace(/'/g, "&#039;");
         }
+
+        //Themes
+
+        function openSettingsModal() {
+            closeModal('control-dropdown');
+            const subMenu = document.getElementById('datalink-sub-menu');
+            if (subMenu) subMenu.style.display = 'none';
+
+            // Sync current stored theme with dropdown option value
+            const currentTheme = localStorage.getItem('infocpu_theme') || 'jarvis';
+            document.getElementById('theme-selector').value = currentTheme;
+            
+            document.getElementById('settings-modal').style.display = 'block';
+        }
+
+        function changeTheme(themeName) {
+            const body = document.body;
+            body.classList.remove('theme-ddlc'); // clear custom variants
+
+            if (themeName === 'ddlc') {
+                body.classList.add('theme-ddlc');
+            }
+
+            // Save choice locally so it persists on refresh
+            localStorage.setItem('infocpu_theme', themeName);
+        }
+
+        function loadSavedTheme() {
+            const savedTheme = localStorage.getItem('infocpu_theme') || 'jarvis';
+            if (savedTheme === 'ddlc') {
+                document.body.classList.add('theme-ddlc');
+            }
+        }
+
+        // Run theme loader immediately when script loads
+        loadSavedTheme();
 
         //QR Code and Bluetooth stuff
 
