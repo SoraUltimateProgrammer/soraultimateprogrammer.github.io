@@ -405,6 +405,18 @@ footer {
                 <label>API / Feed URL</label>
                 <input type="url" id="source-url" placeholder="API/Feed GET Request URL" required>
 
+                <label>Blacklist (optional)</label>
+                <input type="text" id="filter-regex" placeholder="words you don't want to see" autocomplete="off">
+                <p style="font-size: 0.7rem; opacity: 0.6; margin-top: -2px;">
+                    Hide articles containing this query! (RegEx supported!)
+                </p>
+
+                <label>Whitelist (optional)</label>
+                <input type="text" id="whitelist-regex" placeholder="words you want to see" autocomplete="off">
+                <p style="font-size: 0.7rem; opacity: 0.6; margin-top: -2px;">
+                    Only show articles containing this query! (RegEx supported!)
+                </p>
+
                 <div style="display:none;">
                     <input type="text" id="title-element" value="title">
                     <input type="text" id="description-element" value="description">
@@ -441,6 +453,19 @@ footer {
 
                 <label>API / Feed URL</label>
                 <input type="url" id="edit-url" required>
+
+                
+                <label>Blacklist (optional)</label>
+                <input type="text" id="filter-regex" placeholder="words you don't want to see" autocomplete="off">
+                <p style="font-size: 0.7rem; opacity: 0.6; margin-top: -2px;">
+                    Hide articles containing this query! (RegEx supported!)
+                </p>
+
+                <label>Whitelist (optional)</label>
+                <input type="text" id="whitelist-regex" placeholder="words you want to see" autocomplete="off">
+                <p style="font-size: 0.7rem; opacity: 0.6; margin-top: -2px;">
+                    Only show articles containing this query! (RegEx supported!)
+                </p>
 
 
                 <div style="display:none;">
@@ -506,7 +531,7 @@ footer {
     <div id="feed-container"></div>
 
     <footer>
-        [CURRENT VERSION: ALPHA-7]
+        [CURRENT VERSION: ALPHA-8]
     </footer>
 
     <script>
@@ -596,6 +621,8 @@ footer {
             const source = {
                 name: document.getElementById('source-name').value.trim(),
                 url: document.getElementById('source-url').value.trim(),
+                filterRegex: document.getElementById('filter-regex').value.trim(),
+                whitelistRegex: document.getElementById('whitelist-regex').value.trim(),
                 titleElement: document.getElementById('title-element').value.trim(),
                 descriptionElement: document.getElementById('description-element').value.trim(),
                 linkElement: document.getElementById('link-element').value.trim(),
@@ -654,6 +681,8 @@ footer {
                 document.getElementById('edit-id').value = source.id;
                 document.getElementById('edit-name').value = source.name || "";
                 document.getElementById('edit-url').value = source.url || "";
+                document.getElementById('edit-filter-regex').value = source.filterRegex || "";
+                document.getElementById('edit-whitelist-regex').value = source.whitelistRegex || "";
                 document.getElementById('edit-title-element').value = source.titleElement || "";
                 document.getElementById('edit-description-element').value = source.descriptionElement || "";
                 document.getElementById('edit-link-element').value = source.linkElement || "";
@@ -681,11 +710,15 @@ footer {
                     t: source.titleElement,
                     d: source.descriptionElement,
                     l: source.linkElement,
-                    th: source.thumbnailElement
+                    th: source.thumbnailElement,
+                    bl: source.filterRegex || "",
+                    wl: source.whitelistRegex || ""
                 });
 
                 source.name = document.getElementById('edit-name').value.trim();
                 source.url = document.getElementById('edit-url').value.trim();
+                source.filterRegex = document.getElementById('edit-filter-regex').value.trim();
+                source.whitelistRegex = document.getElementById('edit-whitelist-regex').value.trim();
                 source.titleElement = document.getElementById('edit-title-element').value.trim();
                 source.descriptionElement = document.getElementById('edit-description-element').value.trim();
                 source.linkElement = document.getElementById('edit-link-element').value.trim();
@@ -695,7 +728,9 @@ footer {
                     t: source.titleElement,
                     d: source.descriptionElement,
                     l: source.linkElement,
-                    th: source.thumbnailElement
+                    th: source.thumbnailElement,
+                    bl: source.filterRegex || "",
+                    wl: source.whitelistRegex || ""
                 });
 
                 if (source.url !== oldUrl || newMappings !== oldMappings) {
@@ -805,13 +840,59 @@ footer {
                 thumbnailElement
             } = source;
 
-            return rawResponse.slice(0, 10).map(item => ({
-                sourceId,
-                title: item[titleElement] || "Untitled",
-                description: item[descriptionElement] || "",
-                image: item[thumbnailElement] || "https://via.placeholder.com/300x150?text=NO+IMAGE",
-                link: item[linkElement] || "#"
-            }));
+            // Compile the optional filters once per fetch.
+            // Invalid regexes are ignored so one bad filter cannot break a stream.
+            let blacklistRegex = null;
+            let whitelistRegex = null;
+
+            if (source.filterRegex && source.filterRegex.trim()) {
+                try {
+                    blacklistRegex = new RegExp(source.filterRegex, "i");
+                } catch (err) {
+                    console.warn(
+                        `Invalid Blacklist RegEx for source "${source.name}":`,
+                        err
+                    );
+                }
+            }
+
+            if (source.whitelistRegex && source.whitelistRegex.trim()) {
+                try {
+                    whitelistRegex = new RegExp(source.whitelistRegex, "i");
+                } catch (err) {
+                    console.warn(
+                        `Invalid Whitelist RegEx for source "${source.name}":`,
+                        err
+                    );
+                }
+            }
+
+            return rawResponse
+                .map(item => ({
+                    sourceId,
+                    title: item[titleElement] || "Untitled",
+                    description: item[descriptionElement] || "",
+                    image: item[thumbnailElement] ||
+                        "https://via.placeholder.com/300x150?text=NO+IMAGE",
+                    link: item[linkElement] || "#"
+                }))
+                .filter(article => {
+                    const searchableText =
+                        `${article.title} ${article.description}`;
+
+                    // Blacklist wins: matching articles are always excluded.
+                    if (blacklistRegex && blacklistRegex.test(searchableText)) {
+                        return false;
+                    }
+
+                    // If a whitelist exists, the article must match it.
+                    if (whitelistRegex && !whitelistRegex.test(searchableText)) {
+                        return false;
+                    }
+
+                    return true;
+                })
+                .slice(0, 10);
         }
 
         // ---------- Render feed ----------
@@ -999,7 +1080,9 @@ footer {
                         titleElement: s.titleElement || "title",
                         descriptionElement: s.descriptionElement || "description",
                         linkElement: s.linkElement || "link",
-                        thumbnailElement: s.thumbnailElement || "image"
+                        thumbnailElement: s.thumbnailElement || "image",
+                        filterRegex: s.filterRegex || "",
+                        whitelistRegex: s.whitelistRegex || ""
                     }));
         
                 const jsonString = JSON.stringify({ infocpu_packet: exportPayload });
@@ -1086,7 +1169,13 @@ footer {
                 pendingImportData.forEach((stream, index) => {
                     const div = document.createElement('div');
                     div.style.margin = "4px 0";
-                    div.innerHTML = `<strong>[${index + 1}] ${escapeHtml(stream.name)}</strong><br><span style="color:#aaa; font-size:0.75rem;">${escapeHtml(stream.url)}</span>`;
+                    const blacklistText = stream.filterRegex
+                        ? `<br><span style="color:#f87171; font-size:0.7rem;">BLACKLIST: ${escapeHtml(stream.filterRegex)}</span>`
+                        : "";
+                    const whitelistText = stream.whitelistRegex
+                        ? `<br><span style="color:#4ade80; font-size:0.7rem;">WHITELIST: ${escapeHtml(stream.whitelistRegex)}</span>`
+                        : "";
+                    div.innerHTML = `<strong>[${index + 1}] ${escapeHtml(stream.name)}</strong><br><span style="color:#aaa; font-size:0.75rem;">${escapeHtml(stream.url)}</span>${blacklistText}${whitelistText}`;
                     listEl.appendChild(div);
                 });
         
@@ -1110,6 +1199,8 @@ footer {
                     descriptionElement: stream.descriptionElement || "description",
                     linkElement: stream.linkElement || "link",
                     thumbnailElement: stream.thumbnailElement || "image",
+                    filterRegex: stream.filterRegex || "",
+                    whitelistRegex: stream.whitelistRegex || "",
                     lastChecked: 0 // force background fetch trigger
                 });
             });
