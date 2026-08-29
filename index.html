@@ -417,7 +417,7 @@
     <div id="feed-container"></div>
 
     <footer>
-        [CURRENT VERSION: ALPHA-5]
+        [CURRENT VERSION: ALPHA-6]
     </footer>
 
     <script>
@@ -475,7 +475,13 @@
         };
 
         async function initializeApp() {
+            // 1. Render instantly from existing local DB (prevents flickering/delay)
+            renderInterleavedFeed();
+            
+            // 2. Perform background checks/fetches silently without wiping UI first
             await syncSourcesAndFetch();
+            
+            // 3. Re-render once fresh data arrives
             renderInterleavedFeed();
         }
 
@@ -588,7 +594,6 @@
                     th: source.thumbnailElement
                 });
 
-                // Force re-fetch if URL or field mappings changed
                 if (source.url !== oldUrl || newMappings !== oldMappings) {
                     source.lastChecked = 0;
                 }
@@ -597,8 +602,6 @@
             };
 
             tx.oncomplete = async () => {
-                // If mappings/URL changed we may want to clear old articles for this source
-                // so the next fetch uses the new field names cleanly
                 await clearArticlesForSource(id);
                 closeModal('edit-modal');
                 initializeApp();
@@ -608,17 +611,14 @@
         async function deleteSource(id, name) {
             if (!confirm(`Delete stream "${name}" and all its articles?`)) return;
 
-            // Delete the source
             const tx1 = db.transaction(["sources"], "readwrite");
             tx1.objectStore("sources").delete(id);
 
             await new Promise(res => tx1.oncomplete = res);
-
-            // Delete all articles belonging to this source
             await clearArticlesForSource(id);
 
-            renderSourceList();   // refresh the list while modal is still open
-            initializeApp();      // refresh the feed
+            renderSourceList();
+            initializeApp();
         }
 
         function clearArticlesForSource(sourceId) {
@@ -650,7 +650,7 @@
                     const oneHour = 60 * 60 * 1000;
 
                     for (const source of sources) {
-                        if (now - source.lastChecked > oneHour) {
+                        if (now - source.lastChecked > oneHour || source.lastChecked === 0) {
                             await fetchSourceData(source);
                         }
                     }
@@ -667,6 +667,17 @@
 
                 const tx = db.transaction(["articles", "sources"], "readwrite");
                 const artStore = tx.objectStore("articles");
+                
+                // Clear old articles for this source before adding fresh ones
+                const index = artStore.index("sourceId");
+                index.openCursor(IDBKeyRange.only(source.id)).onsuccess = (ev) => {
+                    const cursor = ev.target.result;
+                    if (cursor) {
+                        cursor.delete();
+                        cursor.continue();
+                    }
+                };
+
                 articles.forEach(art => artStore.add(art));
 
                 const srcStore = tx.objectStore("sources");
@@ -701,6 +712,7 @@
 
         // ---------- Render feed ----------
         function renderInterleavedFeed() {
+            if (!db) return;
             const tx = db.transaction(["sources", "articles"], "readonly");
             const sourceStore = tx.objectStore("sources");
             const articleStore = tx.objectStore("articles");
@@ -730,14 +742,25 @@
                     const container = document.getElementById('feed-container');
                     container.innerHTML = "";
                     
+                    if (interleaved.length === 0) {
+                        container.innerHTML = `<div class="empty-list" style="grid-column: 1/-1;">System buffer empty. Add a stream using System Commands.</div>`;
+                        return;
+                    }
+
                     interleaved.forEach(art => {
                         const card = document.createElement('div');
                         card.className = "news-card";
+                        
+                        // Clean up text entities and strip HTML tags from snippet preview
+                        const cleanTitle = decodeHtmlEntities(art.title);
+                        const rawDesc = decodeHtmlEntities(art.description).replace(/<[^>]*>?/gm, '');
+                        const shortDesc = rawDesc.substring(0, 100);
+
                         card.innerHTML = `
                             <span class="source-tag">[SOURCE: ${escapeHtml(art.sourceName)}]</span>
                             <img src="${art.image}" alt="Thumbnail" onerror="this.src='https://via.placeholder.com/300x150?text=ERROR'">
-                            <h3><a href="${art.link}" target="_blank">${escapeHtml(art.title)}</a></h3>
-                            <p>${escapeHtml((art.description || "").substring(0, 100))}...</p>
+                            <h3><a href="${art.link}" target="_blank">${escapeHtml(cleanTitle)}</a></h3>
+                            <p>${escapeHtml(shortDesc)}...</p>
                         `;
                         container.appendChild(card);
                     });
@@ -745,7 +768,14 @@
             };
         }
 
-        // Simple HTML escape to avoid XSS from source names / titles
+        // ---------- Decoders & Sanitizers ----------
+        function decodeHtmlEntities(str) {
+            if (!str) return "";
+            const parser = new DOMParser();
+            const dom = parser.parseFromString(`<!doctype html><body>${str}`, 'text/html');
+            return dom.body.textContent;
+        }
+
         function escapeHtml(str) {
             if (!str) return "";
             return String(str)
