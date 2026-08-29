@@ -525,6 +525,19 @@ footer {
             <div id="import-streams-list" style="max-height: 120px; overflow-y: auto; background: rgba(0,0,0,0.3); padding: 8px; margin: 8px 0; font-size: 0.85rem; text-align: left;"></div>
             <button onclick="confirmAndExecuteImport()" style="width: 100%; background-color: #22c55e; color: black; font-weight: bold; margin-top: 5px;">Authorize Import</button>
         </div>
+        <div id="qr-image-upload" style="margin: 15px 0; text-align: center;">
+    <p style="font-size: 0.8rem; opacity: 0.7; margin-bottom: 8px;">
+        Or upload an image of a QR code:
+    </p>
+
+    <input
+        type="file"
+        id="qr-image-input"
+        accept="image/*"
+        style="width: 100%; box-sizing: border-box;"
+        onchange="handleQRImageUpload(event)"
+    >
+</div>
     </div>
 </div>
     
@@ -1148,6 +1161,52 @@ footer {
 
             document.getElementById('import-modal').style.display = 'none';
         }
+
+        async function handleQRImageUpload(event) {
+    const file = event.target.files[0];
+
+    if (!file) return;
+
+    // Make sure it is actually an image
+    if (!file.type.startsWith("image/")) {
+        alert("Please select an image file containing a QR code.");
+        event.target.value = "";
+        return;
+    }
+
+    try {
+        // Stop the camera scanner if it is currently running.
+        if (html5QrCode && html5QrCode.isScanning) {
+            await html5QrCode.stop();
+        }
+
+        // Create a temporary scanner specifically for the uploaded image.
+        const imageScanner = new Html5Qrcode("reader");
+
+        const decodedText = await imageScanner.scanFile(file, true);
+
+        // We successfully decoded the QR code.
+        handleScannedPayload(decodedText);
+
+        // Clean up the temporary scanner.
+        try {
+            imageScanner.clear();
+        } catch (cleanupError) {
+            console.warn("QR image scanner cleanup:", cleanupError);
+        }
+
+    } catch (err) {
+        console.warn("Unable to decode QR image:", err);
+
+        alert(
+            "No readable QR code was found in that image. " +
+            "Please try a clearer image containing the entire QR code."
+        );
+    }
+
+    // Allow the same image to be selected again.
+    event.target.value = "";
+}
         
         function handleScannedPayload(rawText) {
             try {
