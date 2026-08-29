@@ -24,9 +24,15 @@ body.theme-ddlc {
     --hud-panel: rgba(139, 69, 19, 0.04);
     --hud-border: rgba(139, 69, 19, 0.25);
     --text-glow: none;
-    --hud-font: 'Brush Script MT', cursive, serif;
+    --hud-font: 'Arial', 'Helvetica', sans-serif; /* Global DDLC font */
+    --header-font: 'Lucida Handwriting', 'Lucida Calligraphy', cursive; /* Title font */
     --header-color: #111111;
     --header-shadow: none;
+}
+
+/* Apply handwriting font exclusively to the main title and subtitle */
+body.theme-ddlc h1, body.theme-ddlc p.subtitle {
+    font-family: var(--header-font);
 }
 
 body {
