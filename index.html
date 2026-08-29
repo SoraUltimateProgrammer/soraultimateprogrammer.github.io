@@ -376,7 +376,7 @@ footer {
         
         <div class="dropdown" id="control-dropdown">
             <button class="hud-btn" onclick="toggleDropdown()">SYSTEM COMMANDS ▼</button>
-            <div class="dropdown-content" id="control-dropdown">
+            <div class="dropdown-content" id="control-menu">
                 <button onclick="openAddModal()">+ Add New Stream</button>
                 <button onclick="openModifyModal()">Modify Streams</button>
                 <button onclick="openSettingsModal()">⚙️ Settings</button>
@@ -444,10 +444,10 @@ footer {
 
 
                 <div style="display:none;">
-                    <input type="text" id="title-element" value="title">
-                    <input type="text" id="description-element" value="description">
-                    <input type="text" id="link-element" value="link">
-                    <input type="text" id="thumbnail-element" value="image">
+                    <input type="text" id="edit-title-element" value="title">
+                    <input type="text" id="edit-description-element" value="description">
+                    <input type="text" id="edit-link-element" value="link">
+                    <input type="text" id="edit-thumbnail-element" value="image">
                 </div>
 
                 <button type="submit" class="submit-btn">UPDATE STREAM</button>
@@ -473,7 +473,7 @@ footer {
     <!-- Export via QR Modal -->
 <div id="export-modal" class="modal" style="display:none;">
     <div class="modal-content">
-        <span class="close" onclick="closeModal('export-modal')">&times;</span>
+        <span class="close-modal" onclick="closeModal('export-modal')">&times;</span>
         <h2>Export Streams via QR Code</h2>
         <p style="font-size: 0.85rem; color: #aaa; margin-bottom: 10px;">Select the data streams you wish to compile into a transmission sequence:</p>
         
@@ -490,7 +490,7 @@ footer {
 <!-- Import via QR Modal -->
 <div id="import-modal" class="modal" style="display:none;">
     <div class="modal-content">
-        <span class="close" onclick="closeImportModal()">&times;</span>
+        <span class="close-modal" onclick="closeImportModal()">&times;</span>
         <h2>Import Streams via QR Code</h2>
         
         <div id="reader" style="width: 100%; max-width: 280px; margin: 10px auto;"></div>
@@ -534,16 +534,27 @@ footer {
         }
 
         function openAddModal() {
+            closeDropdown();
             document.getElementById('add-modal').style.display = "block";
         }
 
         function openModifyModal() {
+            closeDropdown();
             renderSourceList();
             document.getElementById('modify-modal').style.display = "block";
         }
 
         function closeModal(id) {
-            document.getElementById(id).style.display = "none";
+            const modal = document.getElementById(id);
+            if (modal) modal.style.display = "none";
+        }
+
+        function closeDropdown() {
+            const dropdown = document.getElementById('control-dropdown');
+            if (dropdown) dropdown.classList.remove('active');
+
+            const subMenu = document.getElementById('datalink-sub-menu');
+            if (subMenu) subMenu.style.display = 'none';
         }
 
         // ---------- IndexedDB ----------
@@ -892,7 +903,7 @@ footer {
         //Themes
 
         function openSettingsModal() {
-            closeModal('control-dropdown');
+            closeDropdown();
             const subMenu = document.getElementById('datalink-sub-menu');
             if (subMenu) subMenu.style.display = 'none';
 
@@ -936,7 +947,7 @@ footer {
         
         // ---------- EXPORT QR CODE LOGIC ----------
         function openExportModal() {
-            closeModal('control-dropdown');
+            closeDropdown();
             const subMenu = document.getElementById('datalink-sub-menu');
             if (subMenu) subMenu.style.display = 'none';
         
@@ -1012,8 +1023,11 @@ footer {
         let html5QrCode = null;
         let pendingImportData = null;
         
-        function openImportModal() {
-            closeModal('control-dropdown');
+        async function openImportModal() {
+            closeDropdown();
+            if (html5QrCode) {
+                await closeImportModal();
+            }
             document.getElementById('import-preview-section').style.display = 'none';
             document.getElementById('import-streams-list').innerHTML = '';
             document.getElementById('import-modal').style.display = 'block';
@@ -1035,15 +1049,22 @@ footer {
             });
         }
         
-        function closeImportModal() {
-            if (html5QrCode && html5QrCode.isScanning) {
-                html5QrCode.stop().then(() => {
-                    html5QrCode.clear();
-                    document.getElementById('import-modal').style.display = 'none';
-                }).catch(err => console.error("Failed to stop scanner:", err));
-            } else {
-                document.getElementById('import-modal').style.display = 'none';
+        async function closeImportModal() {
+            const scanner = html5QrCode;
+            html5QrCode = null;
+
+            if (scanner) {
+                try {
+                    if (scanner.isScanning) {
+                        await scanner.stop();
+                    }
+                    scanner.clear();
+                } catch (err) {
+                    console.warn("Scanner cleanup failed:", err);
+                }
             }
+
+            document.getElementById('import-modal').style.display = 'none';
         }
         
         function handleScannedPayload(rawText) {
