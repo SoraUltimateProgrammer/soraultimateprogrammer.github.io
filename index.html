@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Information CPU</title>
+    <style>
+        :root {
+            --hud-blue: #00f3ff;
+            --hud-bg: #030a14;
+            --hud-panel: rgba(0, 243, 255, 0.05);
+            --hud-border: rgba(0, 243, 255, 0.3);
+            --text-glow: 0 0 10px rgba(0, 243, 255, 0.5);
+        }
+
+        body {
+            background-color: var(--hud-bg);
+            color: var(--hud-blue);
+            font-family: 'Courier New', Courier, monospace;
+            margin: 0;
+            padding: 20px;
+            background-image: linear-gradient(rgba(0, 243, 255, 0.03) 1px, transparent 1px),
+                              linear-gradient(90deg, rgba(0, 243, 255, 0.03) 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        header {
+            text-align: center;
+            border-bottom: 2px solid var(--hud-border);
+            padding-bottom: 15px;
+            margin-bottom: 20px;
+            text-shadow: var(--text-glow);
+        }
+
+        h1 { margin: 0; font-size: 2rem; letter-spacing: 2px; }
+        p.subtitle { margin: 5px 0 0; font-size: 0.9rem; opacity: 0.8; }
+
+        .control-panel {
+            background: var(--hud-panel);
+            border: 1px solid var(--hud-border);
+            padding: 15px;
+            margin-bottom: 20px;
+            box-shadow: inset 0 0 15px rgba(0, 243, 255, 0.1);
+        }
+
+        input, button {
+            background: transparent;
+            border: 1px solid var(--hud-blue);
+            color: var(--hud-blue);
+            padding: 8px 12px;
+            margin: 5px;
+            font-family: inherit;
+            outline: none;
+        }
+
+        button:hover {
+            background: var(--hud-blue);
+            color: var(--hud-bg);
+            cursor: pointer;
+            box-shadow: var(--text-glow);
+        }
+
+        #feed-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 15px;
+        }
+
+        .news-card {
+            background: var(--hud-panel);
+            border: 1px solid var(--hud-border);
+            padding: 15px;
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .news-card:hover {
+            border-color: var(--hud-blue);
+            box-shadow: var(--text-glow);
+        }
+
+        .news-card img {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+            border: 1px solid var(--hud-border);
+            margin-bottom: 10px;
+        }
+
+        .news-card h3 {
+            font-size: 1rem;
+            margin: 0 0 10px 0;
+        }
+
+        .news-card a {
+            color: var(--hud-blue);
+            text-decoration: none;
+        }
+
+        .news-card a:hover {
+            text-decoration: underline;
+        }
+
+        .source-tag {
+            font-size: 0.75rem;
+            opacity: 0.7;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+            display: block;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>THE INFORMATION CPU</h1>
+        <p class="subtitle">[SYSTEM STATUS: ONLINE // PROTOCOL: JARVIS-HUD]</p>
+    </header>
+
+    <div class="control-panel">
+        <h3>// ADD NEW DATA STREAM</h3>
+        <form id="source-form">
+            <input type="text" id="source-name" placeholder="Source Name (e.g., TechCrunch)" required>
+            <input type="url" id="source-url" placeholder="API/Feed GET Request URL" required>
+            <button type="submit">INITIALIZE STREAM</button>
+        </form>
+    </div>
+
+    <div id="feed-container">
+        </div>
+
+    <script>
+        const AWS_API_ENDPOINT = "YOUR_API_GATEWAY_URL_HERE";
+        let db;
+
+        // 1. Initialize IndexedDB
+        const request = indexedDB.open("InformationCPUDB", 1);
+        
+        request.onerror = (event) => console.error("IndexedDB error:", event.target.error);
+        
+        request.onsuccess = (event) => {
+            db = event.target.result;
+            initializeApp();
+        };
+
+        request.onupgradeneeded = (event) => {
+            db = event.target.result;
+            if (!db.objectStoreNames.contains("sources")) {
+                db.createObjectStore("sources", { keyPath: "id", autoIncrement: true });
+            }
+            if (!db.objectStoreNames.contains("articles")) {
+                const articleStore = db.createObjectStore("articles", { keyPath: "id", autoIncrement: true });
+                articleStore.createIndex("sourceId", "sourceId", { unique: false });
+            }
+        };
+
+        async function initializeApp() {
+            await syncSourcesAndFetch();
+            renderInterleavedFeed();
+        }
+
+        // Handle Form Submission for New Sources
+        document.getElementById('source-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const name = document.getElementById('source-name').value;
+            const url = document.getElementById('source-url').value;
+
+            const transaction = db.transaction(["sources"], "readwrite");
+            const store = transaction.objectStore("sources");
+            store.add({ name, url, lastChecked: 0 });
+
+            transaction.oncomplete = () => {
+                document.getElementById('source-form').reset();
+                initializeApp();
+            };
+        });
+
+        // 2. Check 1-hour freshness and fetch via AWS
+        function syncSourcesAndFetch() {
+            return new Promise((resolve) => {
+                const transaction = db.transaction(["sources"], "readonly");
+                const store = transaction.objectStore("sources");
+                const request = store.getAll();
+
+                request.onsuccess = async () => {
+                    const sources = request.result;
+                    const now = Date.now();
+                    const oneHour = 60 * 60 * 1000;
+
+                    for (const source of sources) {
+                        if (now - source.lastChecked > oneHour) {
+                            await fetchSourceData(source);
+                        }
+                    }
+                    resolve();
+                };
+            });
+        }
+
+        async function fetchSourceData(source) {
+            try {
+                const response = await fetch(`${AWS_API_ENDPOINT}?url=${encodeURIComponent(source.url)}`);
+                const data = await response.json();
+                
+                // Assume data returns an array of items or custom parsing happens here
+                // Standardizing to: { title, description, image, link }
+                const articles = parseArticles(data, source.id);
+
+                // Save articles & update timestamp
+                const tx = db.transaction(["articles", "sources"], "readwrite");
+                const artStore = tx.objectStore("articles");
+                
+                // Clear old articles for this source first if desired, or append
+                articles.forEach(art => artStore.add(art));
+
+                const srcStore = tx.objectStore("sources");
+                source.lastChecked = Date.now();
+                srcStore.put(source);
+
+                await new Promise((res) => tx.oncomplete = res);
+            } catch (err) {
+                console.error(`Failed to fetch source ${source.name}:`, err);
+            }
+        }
+
+        // Helper mapper (customize depending on the JSON structure of your feeds)
+        function parseArticles(rawResponse, sourceId) {
+            // Placeholder mapping logic assuming rawResponse is an array of items
+            if (!Array.isArray(rawResponse)) return [];
+            return rawResponse.slice(0, 10).map(item => ({
+                sourceId: sourceId,
+                title: item.title || "Untitled",
+                description: item.description || "",
+                image: item.image || "https://via.placeholder.com/300x150?text=NO+IMAGE",
+                link: item.link || "#"
+            }));
+        }
+
+        // 3. Interleave Sources (ABCABC pattern)
+        function renderInterleavedFeed() {
+            const tx = db.transaction(["sources", "articles"], "readonly");
+            const sourceStore = tx.objectStore("sources");
+            const articleStore = tx.objectStore("articles");
+
+            sourceStore.getAll().onsuccess = (e) => {
+                const sources = e.target.result;
+                articleStore.getAll().onsuccess = (e) => {
+                    const allArticles = e.target.result;
+                    
+                    // Group articles by sourceId
+                    const grouped = {};
+                    sources.forEach(s => grouped[s.id] = []);
+                    allArticles.forEach(art => {
+                        if (grouped[art.sourceId]) grouped[art.sourceId].push(art);
+                    });
+
+                    // Build ABCABC interleave array
+                    const interleaved = [];
+                    let maxLength = Math.max(...Object.values(grouped).map(arr => arr.length), 0);
+
+                    for (let i = 0; i < maxLength; i++) {
+                        sources.forEach(s => {
+                            if (grouped[s.id][i]) {
+                                interleaved.push({ ...grouped[s.id][i], sourceName: s.name });
+                            }
+                        });
+                    }
+
+                    // Render to DOM
+                    const container = document.getElementById('feed-container');
+                    container.innerHTML = "";
+                    
+                    interleaved.forEach(art => {
+                        const card = document.createElement('div');
+                        card.className = "news-card";
+                        card.innerHTML = `
+                            <span class="source-tag">[SOURCE: ${art.sourceName}]</span>
+                            <img src="${art.image}" alt="Thumbnail" onerror="this.src='https://via.placeholder.com/300x150?text=ERROR'">
+                            <h3><a href="${art.link}" target="_blank">${art.title}</a></h3>
+                            <p>${art.description.substring(0, 100)}...</p>
+                        `;
+                        container.appendChild(card);
+                    });
+                };
+            };
+        }
+    </script>
+</body>
+</html>
